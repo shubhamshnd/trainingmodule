@@ -10,7 +10,8 @@ from .forms import RequestTrainingForm, TrainingRequestApprovalForm, CheckerAppr
 import logging
 from django.utils import timezone
 from itertools import chain
-
+from collections import defaultdict
+from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
 
 def easter_egg_page(request):
@@ -216,56 +217,27 @@ def hod_reject_request(request):
 
 @login_required
 def checker_check_requests(request):
-    # Include statuses 2 (HODapproved), 3 (CKRapproved), and 5 (CKRrejected)
-    user_requests = RequestTraining.objects.filter(status__id__in=[2, 3, 5]).order_by('-request_date')
-    hod_assignments = HODTrainingAssignment.objects.filter(status__id__in=[2, 3, 5]).order_by('-assignment_date')
+    # Get counts for each training programme and their statuses
+    user_requests = RequestTraining.objects.filter(status__id__in=[2, 3, 5]).values('training_programme__title', 'status__name').annotate(count=Count('id'))
+    hod_assignments = HODTrainingAssignment.objects.filter(status__id__in=[2, 3, 5]).values('training_programme__title', 'status__name').annotate(count=Count('id'))
 
-    # Debug: Log the count of retrieved requests
-    logging.debug(f"Number of user requests with status ID 2, 3, 5: {user_requests.count()}")
-    logging.debug(f"Number of HOD assignments with status ID 2, 3, 5: {hod_assignments.count()}")
-
-    if request.method == 'POST':
-        form = TrainingRequestApprovalForm(request.POST)
-        if form.is_valid():
-            request_id = form.cleaned_data.get('request_id')
-            assignment_id = form.cleaned_data.get('assignment_id')
-            status_id = form.cleaned_data['status_id']
-            checker_comment = form.cleaned_data['checker_comment']
-
-            if assignment_id:
-                assignment = get_object_or_404(HODTrainingAssignment, id=assignment_id)
-                status = get_object_or_404(Status, id=status_id)
-                assignment.status = status
-                assignment.checker_comment = checker_comment
-                assignment.checker_approval_timestamp = timezone.now()
-                assignment.save()
-                messages.success(request, f"Training assignment #{assignment.id} has been updated successfully.")
-            else:
-                training_request = get_object_or_404(RequestTraining, id=request_id)
-                status = get_object_or_404(Status, id=status_id)
-                training_request.status = status
-                training_request.checker_comment = checker_comment
-                training_request.checker_approval_timestamp = timezone.now()
-                training_request.save()
-                messages.success(request, f"Training request #{request_id} has been updated successfully.")
-
-            return redirect('checker_check_requests')
-        else:
-            messages.error(request, "Invalid form submission. Please try again.")
-            logging.error(f"Invalid form data: {form.errors}")
-    else:
-        form = TrainingRequestApprovalForm()
-
-    combined_requests = sorted(
-        list(user_requests) + list(hod_assignments),
-        key=lambda x: x.request_date if isinstance(x, RequestTraining) else x.assignment_date,
-        reverse=True
-    )
-
+    combined_counts = defaultdict(lambda: {'total': 0, 'HODapproved': 0, 'CKRapproved': 0, 'CKRrejected': 0})
+    
+    for req in user_requests:
+        combined_counts[req['training_programme__title']]['total'] += req['count']
+        combined_counts[req['training_programme__title']][req['status__name']] += req['count']
+    
+    for assignment in hod_assignments:
+        combined_counts[assignment['training_programme__title']]['total'] += assignment['count']
+        combined_counts[assignment['training_programme__title']][assignment['status__name']] += assignment['count']
+    
+    # Convert to list and sort by total count
+    combined_requests = sorted(combined_counts.items(), key=lambda x: x[1]['total'], reverse=True)
+    
     return render(request, 'checkercheck.html', {
         'combined_requests': combined_requests,
-        'form': form,
     })
+
 @login_required
 def checker_approve_request(request):
     if request.method == 'POST':
@@ -347,14 +319,77 @@ def checker_reject_request(request):
 
 @login_required
 def maker_check_requests(request):
-    user_requests = RequestTraining.objects.filter(status__name='CKRapproved').order_by('-request_date')
-    hod_assignments = HODTrainingAssignment.objects.filter(status__name='CKRapproved').order_by('-assignment_date')
+    # Get counts for each training programme and their statuses
+    user_requests = RequestTraining.objects.filter(status__name='CKRapproved').values('training_programme__title', 'status__name').annotate(count=Count('id'))
+    hod_assignments = HODTrainingAssignment.objects.filter(status__name='CKRapproved').values('training_programme__title', 'status__name').annotate(count=Count('id'))
+
+    combined_counts = defaultdict(lambda: {'total': 0, 'CKRapproved': 0})
     
+    for req in user_requests:
+        combined_counts[req['training_programme__title']]['total'] += req['count']
+        combined_counts[req['training_programme__title']][req['status__name']] += req['count']
+    
+    for assignment in hod_assignments:
+        combined_counts[assignment['training_programme__title']]['total'] += assignment['count']
+        combined_counts[assignment['training_programme__title']][assignment['status__name']] += assignment['count']
+    
+    # Convert to list and sort by total count
+    combined_requests = sorted(combined_counts.items(), key=lambda x: x[1]['total'], reverse=True)
+    
+    return render(request, 'makercheck.html', {
+        'combined_requests': combined_requests,
+    })
+
+
+
+@login_required
+def checker_training_detail(request, training_programme_title):
+    user_requests = RequestTraining.objects.filter(training_programme__title=training_programme_title, status__id__in=[2, 3, 5])
+    hod_assignments = HODTrainingAssignment.objects.filter(training_programme__title=training_programme_title, status__id__in=[2, 3, 5])
+
     combined_requests = sorted(
         list(user_requests) + list(hod_assignments),
         key=lambda x: x.request_date if isinstance(x, RequestTraining) else x.assignment_date,
         reverse=True
     )
 
-    logging.debug(f"Fetched {len(combined_requests)} CKRapproved requests for the maker view.")
-    return render(request, 'makercheck.html', {'combined_requests': combined_requests})
+    pending_approval = any(req.status.name not in ['CKRapproved', 'CKRrejected'] for req in combined_requests)
+
+    if request.method == 'POST':
+        status_id = request.POST.get('status_id')
+        checker_comment = request.POST.get('checker_comment')
+
+        if not status_id or not checker_comment:
+            messages.error(request, "Both status and comment are required.")
+            return redirect(request.path)
+
+        for req in combined_requests:
+            req.status_id = status_id
+            req.checker_comment = checker_comment
+            req.checker_approval_timestamp = timezone.now()
+            req.save()
+
+        messages.success(request, "All training requests have been updated successfully.")
+        return redirect('checker_check_requests')
+
+    return render(request, 'checker_training_detail.html', {
+        'training_programme_title': training_programme_title,
+        'combined_requests': combined_requests,
+        'pending_approval': pending_approval
+    })
+
+@login_required
+def maker_training_detail(request, training_programme_title):
+    user_requests = RequestTraining.objects.filter(training_programme__title=training_programme_title, status__name='CKRapproved')
+    hod_assignments = HODTrainingAssignment.objects.filter(training_programme__title=training_programme_title, status__name='CKRapproved')
+
+    combined_requests = sorted(
+        list(user_requests) + list(hod_assignments),
+        key=lambda x: x.request_date if isinstance(x, RequestTraining) else x.assignment_date,
+        reverse=True
+    )
+
+    return render(request, 'maker_training_detail.html', {
+        'training_programme_title': training_programme_title,
+        'combined_requests': combined_requests,
+    })

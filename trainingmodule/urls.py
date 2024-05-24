@@ -19,4 +19,6 @@ urlpatterns = [
     path('reject_request/', views.checker_reject_request, name='checker_reject_request'),
     path('maker-check-requests/', views.maker_check_requests, name='maker_check_requests'),
     path('easter_egg/', views.easter_egg_page, name='easter_egg_page'),
+    path('checker-training-detail/<str:training_programme_title>/', views.checker_training_detail, name='checker_training_detail'),
+    path('maker-training-detail/<str:training_programme_title>/', views.maker_training_detail, name='maker_training_detail'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
