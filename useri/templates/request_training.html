@@ -1,0 +1,83 @@
+{% extends 'userbase.html' %}
+
+{% block title %}Request Training{% endblock %}
+{% block extrastyles %}
+<style>
+    .container1 {
+        margin-top: 20px;
+    }
+    .table th, .table td {
+        vertical-align: middle;
+    }
+    .scrollable-table {
+        max-height: 95vh;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container1">
+    <div class="row">
+        <div class="col-md-3">
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="training_programme" class="form-label">Select Training Programme</label>
+                    {{ form.training_programme }}
+                </div>
+                <div class="mb-3">
+                    <label for="other_training" class="form-label">Other Training (if not listed above)</label>
+                    {{ form.other_training }}
+                </div>
+                <div class="mb-3">
+                    <label for="user_comment" class="form-label">Comment</label>
+                    {{ form.user_comment }}
+                </div>
+                <button type="submit" class="btn btn-primary">Submit Request</button>
+            </form>
+        </div>
+        <div class="col-md-9">
+            <h3>Your Training Requests</h3>
+            <div class="scrollable-table">
+                <table class="table table-primary table-striped">
+                    <thead>
+                        <tr>
+                            <th scope="col">Training Programme</th>
+                            <th scope="col">Other Training</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Request Date</th>
+                            <th scope="col">User Comment</th>
+                            <th scope="col">HOD Comment</th>
+                            <th scope="col">Checker Comment</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for request in user_requests %}
+                        <tr>
+                            <td>
+                                {% if request.training_programme %}
+                                    {{ request.training_programme.title }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ request.other_training }}</td>
+                            <td>{{ request.status.name }}</td>
+                            <td>{{ request.request_date }}</td>
+                            <td>{{ request.user_comment }}</td>
+                            <td>{{ request.hod_comment }}</td>
+                            <td>{{ request.checker_comment }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7">No training requests found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

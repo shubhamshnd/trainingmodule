@@ -1,0 +1,88 @@
+{% extends 'makerbase.html' %}
+{% load custom_filters %}
+
+{% block title %}Maker Check Requests{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Approved Training Requests</h2>
+    {% if messages %}
+        <div class="alert alert-info" role="alert">
+            {% for message in messages %}
+                <p>{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+    <div style="max-height: 95vh; overflow-y: auto;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">User</th>
+                    <th scope="col">Training</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Request Date</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for request in combined_requests %}
+                <tr class="{% if request|is_instance:'HODTrainingAssignment' %}table-danger{% else %}table-primary{% endif %}">
+                    <td>
+                        {% if request|is_instance:'RequestTraining' %}
+                            {{ request.custom_user.employee_name }}
+                        {% else %}
+                            {{ request.assigned_user.employee_name }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if request.other_training %}
+                            {{ request.other_training }}
+                        {% else %}
+                            {{ request.training_programme.title }}
+                        {% endif %}
+                    </td>
+                    <td>{{ request.status.name }}</td>
+                    <td>
+                        {% if request|is_instance:'RequestTraining' %}
+                            {{ request.request_date }}
+                        {% else %}
+                            {{ request.assignment_date }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-info" data-bs-toggle="popover" title="Request Details"
+                                data-bs-content="Training: {% if request.other_training %}{{ request.other_training }}{% else %}{{ request.training_programme.title }}{% endif %}
+                                                <br>User Comment: {% if request|is_instance:'RequestTraining' %}{{ request.user_comment }}{% endif %}
+                                                <br>HOD Comment: {{ request.hod_comment }}
+                                                <br>Checker Comment: {{ request.checker_comment }}
+                                                <br>Date: {% if request|is_instance:'RequestTraining' %}{{ request.request_date }}{% else %}{{ request.assignment_date }}{% endif %}
+                                                <br>HOD Approval Timestamp: {{ request.hod_approval_timestamp }}
+                                                <br>Checker Approval Timestamp: {{ request.checker_approval_timestamp }}">
+                            Details
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6">No approved training requests found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrascripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl, {
+            trigger: 'focus',
+            html: true
+        });
+    });
+});
+</script>
+{% endblock %}
