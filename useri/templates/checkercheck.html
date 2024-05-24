@@ -17,7 +17,7 @@
                 </thead>
                 <tbody>
                     {% for training, counts in combined_requests %}
-                    <tr class="{% if counts.CKRrejected > 0 %}table-danger{% elif counts.CKRapproved > 0 %}table-success{% elif counts.HODapproved > 0 %}table-primary{% endif %}">
+                    <tr class="{% if counts.CKRrejected > 0 %}table-danger{% elif counts.CKRapproved > 0 %}table-success{% elif counts.HODapproved > 0 %}table-warning{% endif %}">
                         <td>{{ training }}</td>
                         <td>{{ counts.total }}</td>
                         <td>
