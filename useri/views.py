@@ -213,10 +213,16 @@ def hod_reject_request(request):
     return redirect('hod_check_requests')
 
 
+
 @login_required
 def checker_check_requests(request):
-    user_requests = RequestTraining.objects.all().order_by('-request_date')
-    hod_assignments = HODTrainingAssignment.objects.all().order_by('-assignment_date')
+    # Include statuses 2 (HODapproved), 3 (CKRapproved), and 5 (CKRrejected)
+    user_requests = RequestTraining.objects.filter(status__id__in=[2, 3, 5]).order_by('-request_date')
+    hod_assignments = HODTrainingAssignment.objects.filter(status__id__in=[2, 3, 5]).order_by('-assignment_date')
+
+    # Debug: Log the count of retrieved requests
+    logging.debug(f"Number of user requests with status ID 2, 3, 5: {user_requests.count()}")
+    logging.debug(f"Number of HOD assignments with status ID 2, 3, 5: {hod_assignments.count()}")
 
     if request.method == 'POST':
         form = TrainingRequestApprovalForm(request.POST)
@@ -260,8 +266,6 @@ def checker_check_requests(request):
         'combined_requests': combined_requests,
         'form': form,
     })
-
-
 @login_required
 def checker_approve_request(request):
     if request.method == 'POST':
