@@ -13,7 +13,7 @@ from itertools import chain
 from collections import defaultdict
 from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
-
+from django.db.models import Q
 def easter_egg_page(request):
     context = {
         'range_170': range(170),
@@ -115,6 +115,7 @@ def hod_check_requests(request):
             training_request.status = status
             training_request.hod_comment = hod_comment
             training_request.hod_approval_timestamp = timezone.now()
+            training_request.hod_user = request.user
             training_request.save()
 
             messages.success(request, f"Training request #{request_id} has been updated successfully.")
@@ -129,7 +130,8 @@ def hod_check_requests(request):
                     training_programme=hod_assignment_form.cleaned_data['training_programme'],
                     other_training=hod_assignment_form.cleaned_data['other_training'],
                     hod_comment=hod_assignment_form.cleaned_data['hod_comment'],
-                    status=Status.objects.get(name='HODapproved')
+                    status=Status.objects.get(name='HODapproved'),
+                    hod_approval_timestamp=timezone.now()
                 )
                 hod_assignment.save()
             messages.success(request, "Training has been assigned successfully.")
@@ -154,7 +156,6 @@ def hod_check_requests(request):
         'hod_assignment_form': hod_assignment_form,
     })
 
-
 @login_required
 def hod_approve_request(request):
     if request.method == 'POST':
@@ -171,6 +172,7 @@ def hod_approve_request(request):
             training_request.status = status
             training_request.hod_comment = hod_comment
             training_request.hod_approval_timestamp = timezone.now()
+            training_request.hod_user = request.user  # Set the HOD user
             training_request.save()
             
             messages.success(request, f"Training request #{request_id} has been approved successfully.")
@@ -200,6 +202,7 @@ def hod_reject_request(request):
             training_request.status = status
             training_request.hod_comment = hod_comment
             training_request.hod_approval_timestamp = timezone.now()
+            training_request.hod_user = request.user  # Set the HOD user
             training_request.save()
             
             messages.success(request, f"Training request #{request_id} has been rejected successfully.")
@@ -213,11 +216,9 @@ def hod_reject_request(request):
     
     return redirect('hod_check_requests')
 
-
-
 @login_required
 def checker_check_requests(request):
-    # Get counts for each training programme and their statuses
+    # Get counts for each training programme and their statuses, including fully processed ones
     user_requests = RequestTraining.objects.filter(status__id__in=[2, 3, 5]).values('training_programme__title', 'status__name').annotate(count=Count('id'))
     hod_assignments = HODTrainingAssignment.objects.filter(status__id__in=[2, 3, 5]).values('training_programme__title', 'status__name').annotate(count=Count('id'))
 
@@ -353,30 +354,31 @@ def checker_training_detail(request, training_programme_title):
         reverse=True
     )
 
-    pending_approval = any(req.status.name not in ['CKRapproved', 'CKRrejected'] for req in combined_requests)
-
     if request.method == 'POST':
-        status_id = request.POST.get('status_id')
+        request_ids = request.POST.getlist('selected_requests')
+        action = request.POST.get('action')
         checker_comment = request.POST.get('checker_comment')
+        status_id = 3 if action == 'approve' else 5
 
-        if not status_id or not checker_comment:
-            messages.error(request, "Both status and comment are required.")
-            return redirect(request.path)
+        for request_id in request_ids:
+            req = RequestTraining.objects.filter(id=request_id).first() or HODTrainingAssignment.objects.filter(id=request_id).first()
+            if req:
+                req.status_id = status_id
+                req.checker_comment = checker_comment
+                req.checker_approval_timestamp = timezone.now()
+                req.save()
 
-        for req in combined_requests:
-            req.status_id = status_id
-            req.checker_comment = checker_comment
-            req.checker_approval_timestamp = timezone.now()
-            req.save()
-
-        messages.success(request, "All training requests have been updated successfully.")
+        messages.success(request, "Selected training requests have been updated successfully.")
         return redirect('checker_check_requests')
+
+    pending_approval = any(req.status.name not in ['CKRapproved', 'CKRrejected'] for req in combined_requests)
 
     return render(request, 'checker_training_detail.html', {
         'training_programme_title': training_programme_title,
         'combined_requests': combined_requests,
         'pending_approval': pending_approval
     })
+
 
 @login_required
 def maker_training_detail(request, training_programme_title):
