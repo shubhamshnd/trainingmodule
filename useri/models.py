@@ -107,6 +107,11 @@ class TrainingProgramme(models.Model):
     def __str__(self):
         return self.title
     
+class VenueMaster(models.Model):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
     
 class Status(models.Model):
     name = models.CharField(max_length=50)

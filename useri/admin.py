@@ -1,11 +1,6 @@
 from django.contrib import admin
-
-# Register your models here.
-# admin.py
-
-from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, Role , TrainingProgramme ,Status, RequestTraining
+from .models import CustomUser, Role, TrainingProgramme, Status, RequestTraining, VenueMaster
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
@@ -32,7 +27,6 @@ class RoleAdmin(admin.ModelAdmin):
     search_fields = ['name']
     
     
-    
 class TrainingProgrammeAdmin(admin.ModelAdmin):
     list_display = ['title']
     search_fields = ['title']
@@ -50,6 +44,12 @@ class RequestTrainingAdmin(admin.ModelAdmin):
     search_fields = ['custom_user__username', 'training_programme__title', 'other_training']
     ordering = ['request_date']
     list_filter = ['status', 'training_programme']
+    
+
+class VenueMasterAdmin(admin.ModelAdmin):
+    list_display = ['name']
+    search_fields = ['name']
+    ordering = ['name']
 
 
 admin.site.register(CustomUser, CustomUserAdmin)
@@ -57,3 +57,4 @@ admin.site.register(Role, RoleAdmin)
 admin.site.register(TrainingProgramme, TrainingProgrammeAdmin)
 admin.site.register(Status, StatusAdmin)
 admin.site.register(RequestTraining, RequestTrainingAdmin)
+admin.site.register(VenueMaster, VenueMasterAdmin)
