@@ -11,15 +11,21 @@
                 <thead>
                     <tr>
                         <th scope="col">Training</th>
-                        <th scope="col">Count</th>
+                        <th scope="col">Total</th>
+                        <th scope="col">Pending</th>
+                        <th scope="col">Approved</th>
+                        <th scope="col">Rejected</th>
                         <th scope="col">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for training, counts in combined_requests %}
-                    <tr class="{% if counts.CKRrejected > 0 %}table-danger{% elif counts.CKRapproved > 0 %}table-success{% elif counts.HODapproved > 0 %}table-warning{% endif %}">
+                    <tr>
                         <td>{{ training }}</td>
                         <td>{{ counts.total }}</td>
+                        <td>{{ counts.HODapproved }}</td>
+                        <td>{{ counts.CKRapproved }}</td>
+                        <td>{{ counts.CKRrejected }}</td>
                         <td>
                             <a href="{% url 'checker_training_detail' training %}" class="btn btn-info">Details</a>
                         </td>

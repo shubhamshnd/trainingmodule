@@ -1,7 +1,7 @@
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-
+from django.utils import timezone
 class Role(models.Model):
     ROLE_CHOICES = (
         ('User', 'User'),
@@ -127,9 +127,11 @@ class RequestTraining(models.Model):
     hod_approval_timestamp = models.DateTimeField(null=True, blank=True)
     checker_approval_timestamp = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
+    hod_user = models.ForeignKey(CustomUser, related_name='hod_requests', on_delete=models.SET_NULL, null=True, blank=True)  # New field
 
     def __str__(self):
         return f"Request by {self.custom_user.username} for {self.training_programme if self.training_programme else self.other_training}"
+
     
     
 
@@ -143,10 +145,12 @@ class HODTrainingAssignment(models.Model):
     assignment_date = models.DateTimeField(auto_now_add=True)
     checker_comment = models.TextField(blank=True)
     checker_approval_timestamp = models.DateTimeField(null=True, blank=True)
+    hod_approval_timestamp = models.DateTimeField(null=True, blank=True)  # New field
 
     def save(self, *args, **kwargs):
         if not self.id:
             self.status = Status.objects.get(name='HODapproved')
+            self.hod_approval_timestamp = timezone.now()  # Set HOD approval timestamp when first created
         super().save(*args, **kwargs)
 
     def __str__(self):

@@ -4,127 +4,133 @@
 
 {% block content %}
 <div class="container">
+    <a href="{% url 'checker_check_requests' %}" class="btn btn-secondary mb-3">Back</a>
     <h2>Training Details for {{ training_programme_title }}</h2>
 
-    <!-- Conditionally show approve/reject buttons only if there are pending requests -->
-    {% if pending_approval %}
-    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#approveAllModal">
-        Approve All
-    </button>
-    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejectAllModal">
-        Reject All
-    </button>
-    {% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <div class="d-flex mb-3 align-items-center">
+            <div class="me-2">
+                <label for="action" class="form-label">Select Action</label>
+                <select name="action" class="form-control" required>
+                    <option value="approve">Approve</option>
+                    <option value="reject">Reject</option>
+                </select>
+            </div>
+            <div>
+                <button type="button" class="btn btn-primary mt-4" data-bs-toggle="modal" data-bs-target="#commentModal">Go</button>
+            </div>
+        </div>
 
-    <!-- Approve All Modal -->
-    <div class="modal fade" id="approveAllModal" tabindex="-1" aria-labelledby="approveAllModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="approveAllModalLabel">Approve All Training Requests</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form method="post" action="">
-                        {% csrf_token %}
-                        <input type="hidden" name="status_id" value="3">
+        <div class="modal fade" id="commentModal" tabindex="-1" aria-labelledby="commentModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="commentModalLabel">Provide Comment</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
                         <div class="mb-3">
-                            <label for="checker_comment" class="form-label">Approval Comment</label>
+                            <label for="checker_comment" class="form-label">Comment</label>
                             <textarea name="checker_comment" class="form-control" rows="4" required></textarea>
                         </div>
-                        <button type="submit" class="btn btn-success">Submit Approval</button>
-                    </form>
+                        <button type="submit" class="btn btn-primary">Submit</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Reject All Modal -->
-    <div class="modal fade" id="rejectAllModal" tabindex="-1" aria-labelledby="rejectAllModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="rejectAllModalLabel">Reject All Training Requests</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form method="post" action="">
-                        {% csrf_token %}
-                        <input type="hidden" name="status_id" value="5">
-                        <div class="mb-3">
-                            <label for="checker_comment" class="form-label">Rejection Comment</label>
-                            <textarea name="checker_comment" class="form-control" rows="4" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-danger">Submit Rejection</button>
-                    </form>
-                </div>
-            </div>
+        <div style="max-height: 90vh; overflow-y: auto; margin-top: 20px;">
+            <table class="table table-sm" style="font-size: 0.875rem;">
+                <thead>
+                    <tr>
+                        <th scope="col"><input type="checkbox" id="select_all" onclick="toggle(this);"></th>
+                        <th scope="col">User</th>
+                        <th scope="col">User Department</th>
+                        <th scope="col">Source</th>
+                        <th scope="col">HOD</th>
+                        <th scope="col">HOD Department</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">User Comment</th>
+                        <th scope="col">HOD Comment</th>
+                        <th scope="col">Checker Comment</th>
+                        <th scope="col">HOD Approval Timestamp</th>
+                        <th scope="col">Checker Approval Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for request in combined_requests %}
+                    <tr class="{% if request.status.name == 'CKRapproved' %}table-success{% elif request.status.name == 'CKRrejected' %}table-danger{% endif %}">
+                        <td><input type="checkbox" name="selected_requests" value="{{ request.id }}"></td>
+                        <td class="text-nowrap">
+                            {% if request|is_instance:'RequestTraining' %}
+                                {{ request.custom_user.employee_name }}
+                            {% else %}
+                                {{ request.assigned_user.employee_name }}
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if request|is_instance:'RequestTraining' %}
+                                {{ request.custom_user.department }}
+                            {% else %}
+                                {{ request.assigned_user.department }}
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if request|is_instance:'RequestTraining' %}
+                                User Requested
+                            {% else %}
+                                HOD Assigned
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if request.hod_user %}
+                                {{ request.hod_user.employee_name }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if request.hod_user %}
+                                {{ request.hod_user.department }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if request|is_instance:'RequestTraining' %}
+                                {{ request.request_date }}
+                            {% else %}
+                                {{ request.assignment_date }}
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if request|is_instance:'RequestTraining' %}
+                                {{ request.user_comment }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">{{ request.hod_comment }}</td>
+                        <td class="text-nowrap">{{ request.checker_comment }}</td>
+                        <td class="text-nowrap">{{ request.hod_approval_timestamp }}</td>
+                        <td class="text-nowrap">{{ request.checker_approval_timestamp }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
-
-    <div style="max-height: 90vh; overflow-y: auto; margin-top: 20px;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th scope="col">User</th>
-                    <th scope="col">Source</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">User Comment</th>
-                    <th scope="col">HOD Comment</th>
-                    <th scope="col">Checker Comment</th>
-                    <th scope="col">HOD Approval Timestamp</th>
-                    <th scope="col">Checker Approval Timestamp</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for request in combined_requests %}
-                <tr>
-                    <td>
-                        {% if request|is_instance:'RequestTraining' %}
-                            {{ request.custom_user.employee_name }}
-                        {% else %}
-                            {{ request.assigned_user.employee_name }}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if request|is_instance:'RequestTraining' %}
-                            User Requested
-                        {% else %}
-                            HOD Assigned
-                        {% endif %}
-                    </td>
-                    <td>{{ request.status.name }}</td>
-                    <td>
-                        {% if request|is_instance:'RequestTraining' %}
-                            {{ request.request_date }}
-                        {% else %}
-                            {{ request.assignment_date }}
-                        {% endif %}
-                    </td>
-                    <td>{{ request.user_comment }}</td>
-                    <td>{{ request.hod_comment }}</td>
-                    <td>{{ request.checker_comment }}</td>
-                    <td>{{ request.hod_approval_timestamp }}</td>
-                    <td>{{ request.checker_approval_timestamp }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    </form>
 </div>
 {% endblock %}
 
 {% block extrascripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
-        return new bootstrap.Popover(popoverTriggerEl, {
-            trigger: 'focus',
-            html: true
-        });
-    });
-});
+function toggle(source) {
+    checkboxes = document.getElementsByName('selected_requests');
+    for(var i = 0, n = checkboxes.length; i < n; i++) {
+        checkboxes[i].checked = source.checked;
+    }
+}
 </script>
 {% endblock %}
