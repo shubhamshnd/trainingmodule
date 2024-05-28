@@ -7,7 +7,7 @@
     <h2>Training Details for {{ training_programme_title }}</h2>
 
     <div style="max-height: 90vh; overflow-y: auto; margin-top: 20px;">
-        <table class="table table-light">
+        <table class="table table-sm" style="font-size: 0.875rem;">
             <thead>
                 <tr>
                     <th scope="col">User</th>
@@ -15,7 +15,6 @@
                     <th scope="col">Source</th>
                     <th scope="col">HOD</th>
                     <th scope="col">HOD Department</th>
-                    <th scope="col">Status</th>
                     <th scope="col">Date</th>
                     <th scope="col">User Comment</th>
                     <th scope="col">HOD Comment</th>
@@ -27,62 +26,59 @@
             <tbody>
                 {% for request in combined_requests %}
                 <tr>
-                    <td>
+                    <td class="text-nowrap">
                         {% if request|is_instance:'RequestTraining' %}
                             {{ request.custom_user.employee_name }}
                         {% else %}
                             {{ request.assigned_user.employee_name }}
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="text-nowrap">
                         {% if request|is_instance:'RequestTraining' %}
                             {{ request.custom_user.department }}
                         {% else %}
                             {{ request.assigned_user.department }}
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="text-nowrap">
                         {% if request|is_instance:'RequestTraining' %}
                             User Requested
                         {% else %}
                             HOD Assigned
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="text-nowrap">
                         {% if request.hod_user %}
                             {{ request.hod_user.employee_name }}
                         {% else %}
                             N/A
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="text-nowrap">
                         {% if request.hod_user %}
                             {{ request.hod_user.department }}
                         {% else %}
                             N/A
                         {% endif %}
                     </td>
-                    <td>{{ request.status.name }}</td>
-                    <td>
+                    <td class="text-nowrap">
                         {% if request|is_instance:'RequestTraining' %}
                             {{ request.request_date }}
                         {% else %}
                             {{ request.assignment_date }}
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="text-nowrap">
                         {% if request|is_instance:'RequestTraining' %}
                             {{ request.user_comment }}
                         {% else %}
                             N/A
                         {% endif %}
                     </td>
-                    <td>
-                        {{ request.hod_comment }}
-                    </td>
-                    <td>{{ request.checker_comment }}</td>
-                    <td>{{ request.hod_approval_timestamp }}</td>
-                    <td>{{ request.checker_approval_timestamp }}</td>
+                    <td class="text-nowrap">{{ request.hod_comment }}</td>
+                    <td class="text-nowrap">{{ request.checker_comment }}</td>
+                    <td class="text-nowrap">{{ request.hod_approval_timestamp }}</td>
+                    <td class="text-nowrap">{{ request.checker_approval_timestamp }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
