@@ -1,6 +1,6 @@
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import path , include
 from useri import views
 from django.conf import settings
 from django.conf.urls.static import static
@@ -21,4 +21,5 @@ urlpatterns = [
     path('easter_egg/', views.easter_egg_page, name='easter_egg_page'),
     path('checker-training-detail/<str:training_programme_title>/', views.checker_training_detail, name='checker_training_detail'),
     path('maker-training-detail/<str:training_programme_title>/', views.maker_training_detail, name='maker_training_detail'),
+    path('formbuilder/', include('formbuilder.urls')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

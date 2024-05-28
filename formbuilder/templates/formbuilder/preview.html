@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Preview</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f4f7;
+            font-size: 0.9rem;
+        }
+        .container {
+            max-width: 800px;
+        }
+        .preview-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2 class="preview-title">Form Preview</h2>
+        <h3>{{ form_data.title }}</h3>
+        <div v-for="(question, index) in form_data.questions" :key="index" class="mb-3">
+            <label :for="'previewQuestion' + index" class="form-label">{{ question.title }}</label>
+            <div v-if="question.type === 'short-answer'">
+                <input type="text" :id="'previewQuestion' + index" class="form-control" placeholder="Your answer">
+            </div>
+            <div v-if="question.type === 'paragraph'">
+                <textarea :id="'previewQuestion' + index" class="form-control" rows="3" placeholder="Your answer"></textarea>
+            </div>
+            <div v-if="question.type === 'multiple-choice'">
+                <div v-for="(option, optIndex) in question.options" :key="optIndex" class="form-check">
+                    <input class="form-check-input" type="radio" :id="'previewOption' + index + optIndex" :name="'question' + index" :value="option">
+                    <label class="form-check-label" :for="'previewOption' + index + optIndex">{{ option }}</label>
+                </div>
+            </div>
+            <div v-if="question.type === 'checkboxes'">
+                <div v-for="(option, optIndex) in question.options" :key="optIndex" class="form-check">
+                    <input class="form-check-input" type="checkbox" :id="'previewOption' + index + optIndex" :name="'question' + index" :value="option">
+                    <label class="form-check-label" :for="'previewOption' + index + optIndex">{{ option }}</label>
+                </div>
+            </div>
+            <div v-if="question.type === 'dropdown'">
+                <select :id="'previewQuestion' + index" class="form-select">
+                    <option v-for="(option, optIndex) in question.options" :key="optIndex" :value="option">{{ option }}</option>
+                </select>
+            </div>
+        </div>
+        <a href="{% url 'create_form' %}" class="btn btn-secondary mt-3">Back</a>
+    </div>
+</body>
+</html>

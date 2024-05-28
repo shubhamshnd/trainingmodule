@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'useri',
+     'formbuilder',
     
 ]
 MESSAGE_STORAGE = 'django.contrib.messages.storage.fallback.FallbackStorage'
