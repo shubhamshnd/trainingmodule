@@ -22,4 +22,8 @@ urlpatterns = [
     path('checker-training-detail/<str:training_programme_title>/', views.checker_training_detail, name='checker_training_detail'),
     path('maker-training-detail/<str:training_programme_title>/', views.maker_training_detail, name='maker_training_detail'),
     path('formbuilder/', include('formbuilder.urls')),
+    path('create_training/', views.create_training, name='create_training'),
+    path('select2/', include('django_select2.urls')),
+    path('modify/<int:pk>/', views.edit_training, name='modify_training'),
+    path('send_training_request/<int:pk>/', views.send_training_request, name='send_training_request'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

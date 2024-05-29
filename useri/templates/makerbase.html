@@ -45,6 +45,9 @@
               <li class="nav-item {% if request.resolver_match.view_name == 'home' %}active{% endif %}">
                 <a class="nav-link" href="{% url 'home' %}">Calendar</a>
               </li>
+              <li class="nav-item {% if request.resolver_match.view_name == 'create_training' %}active{% endif %}">
+                <a class="nav-link" href="{% url 'create_training' %}">Create Trainings</a>
+              </li>
               <li class="nav-item {% if request.resolver_match.view_name == 'maker_check_requests' %}active{% endif %}">
                 <a class="nav-link" href="{% url 'maker_check_requests' %}">Approved Requests</a>
               </li>

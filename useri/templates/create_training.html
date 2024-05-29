@@ -1,0 +1,151 @@
+{% extends 'makerbase.html' %}
+{% load custom_filters %}
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-4" style="max-height: 90vh; overflow-y: auto;">
+      <h2>Create Training Session</h2>
+      <form method="post">
+        {% csrf_token %}
+        
+        <div class="mb-3">
+          {{ form.training_programme.label_tag }} {{ form.training_programme }}
+        </div>
+        <div class="mb-3">
+          {{ form.custom_training_programme.label_tag }} {{ form.custom_training_programme }}
+        </div>
+        <div class="mb-3">
+          {{ form.venue_type.label_tag }} {{ form.venue_type }}
+        </div>
+        <div class="mb-3">
+          {{ form.venue.label_tag }} {{ form.venue }}
+        </div>
+        <div class="mb-3">
+          {{ form.trainer_type.label_tag }} {{ form.trainer_type }}
+        </div>
+
+        <div id="internal-trainer-form" style="display: none;">
+          <div class="mb-3">
+            {{ form.internal_trainer.label_tag }} {{ form.internal_trainer }}
+          </div>
+        </div>
+
+        <div id="external-trainer-form" style="display: none;">
+          <div class="mb-3">
+            {{ external_trainer_form.existing_trainer.label_tag }} {{ external_trainer_form.existing_trainer }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.name.label_tag }} {{ external_trainer_form.name }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.email.label_tag }} {{ external_trainer_form.email }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.phone_number.label_tag }} {{ external_trainer_form.phone_number }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.city.label_tag }} {{ external_trainer_form.city }}
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Create Training</button>
+      </form>
+    </div>
+
+    <div class="col-md-8">
+      <h2>Created Trainings</h2>
+      <table class="table table-sm" style="font-size: 0.875rem;">
+        <thead>
+          <tr>
+            <th scope="col">Topic</th>
+            <th scope="col">Venue</th>
+            <th scope="col">Trainer</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for training in trainings %}
+          <tr class="text-nowrap">
+            <td>
+              {% if training.training_programme %}
+                {{ training.training_programme.title }}
+              {% else %}
+                {{ training.custom_training_programme }}
+              {% endif %}
+            </td>
+            <td>{{ training.venue.name }}</td>
+            <td>
+              {% if training.trainer %}
+                {{ training.trainer.name }} - {{ training.trainer.email }}
+              {% else %}
+                Not Assigned
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'modify_training' training.id %}" class="btn btn-warning btn-sm">Modify</a>
+              <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Select Participants and Timing</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const trainerTypeField = document.querySelector('select[name="trainer_type"]');
+    const externalTrainerForm = document.getElementById('external-trainer-form');
+    const internalTrainerForm = document.getElementById('internal-trainer-form');
+    const trainingProgrammeField = document.querySelector('select[name="training_programme"]');
+    const customTrainingProgrammeField = document.querySelector('input[name="custom_training_programme"]');
+    const venueTypeField = document.querySelector('select[name="venue_type"]');
+    const venueField = document.querySelector('select[name="venue"]');
+
+    const externalFields = externalTrainerForm.querySelectorAll('input, select');
+
+    trainerTypeField.addEventListener('change', function() {
+      if (this.value === 'External') {
+        externalTrainerForm.style.display = 'block';
+        internalTrainerForm.style.display = 'none';
+        externalFields.forEach(field => {
+          field.required = true;
+        });
+      } else {
+        externalTrainerForm.style.display = 'none';
+        internalTrainerForm.style.display = 'block';
+        externalFields.forEach(field => {
+          field.required = false;
+        });
+      }
+    });
+
+    trainingProgrammeField.addEventListener('change', function() {
+      if (this.value) {
+        customTrainingProgrammeField.disabled = true;
+        customTrainingProgrammeField.value = '';
+      } else {
+        customTrainingProgrammeField.disabled = false;
+      }
+    });
+
+    venueTypeField.addEventListener('change', function() {
+      const venueType = this.value;
+      const venues = {{ venues|safe }};
+      let options = '<option value="">---------</option>';
+      venues.forEach(venue => {
+        if (venue.venue_type === venueType) {
+          options += `<option value="${venue.id}">${venue.name}</option>`;
+        }
+      });
+      venueField.innerHTML = options;
+    });
+
+    // Trigger change events to set initial state
+    trainerTypeField.dispatchEvent(new Event('change'));
+    trainingProgrammeField.dispatchEvent(new Event('change'));
+    venueTypeField.dispatchEvent(new Event('change'));
+  });
+</script>
+{% endblock %}

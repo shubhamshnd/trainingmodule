@@ -1,0 +1,41 @@
+{% extends 'makerbase.html' %}
+{% load custom_filters %}
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <h2>Set Training Date and Time</h2>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          {{ form.date.label_tag }} {{ form.date }}
+        </div>
+        <div class="mb-3">
+          {{ form.from_time.label_tag }} {{ form.from_time }}
+        </div>
+        <div class="mb-3">
+          {{ form.to_time.label_tag }} {{ form.to_time }}
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="{% url 'create_training' %}" class="btn btn-secondary">Back</a>
+      </form>
+    </div>
+    <div class="col-md-8">
+      <h2>Training Details</h2>
+      <ul class="list-group">
+        <li class="list-group-item"><strong>Training Programme:</strong>
+          {% if training.training_programme %}
+            {{ training.training_programme.title }}
+          {% else %}
+            {{ training.custom_training_programme }}
+          {% endif %}
+        </li>
+        <li class="list-group-item"><strong>Venue:</strong> {{ training.venue.name }}</li>
+        <li class="list-group-item"><strong>Trainer:</strong> {{ training.trainer.name }} - {{ training.trainer.email }}</li>
+        <li class="list-group-item"><strong>Created By:</strong> {{ training.created_by.username }}</li>
+        <li class="list-group-item"><strong>Created At:</strong> {{ training.created_at }}</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends 'makerbase.html' %}
+{% load custom_filters %}
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <h2>Modify Training Session</h2>
+      <form method="post">
+        {% csrf_token %}
+        
+        <div class="mb-3">
+          {{ form.training_programme.label_tag }} {{ form.training_programme }}
+        </div>
+        <div class="mb-3">
+          {{ form.custom_training_programme.label_tag }} {{ form.custom_training_programme }}
+        </div>
+        <div class="mb-3">
+          {{ form.venue.label_tag }} {{ form.venue }}
+        </div>
+        <div class="mb-3">
+          {{ form.trainer_type.label_tag }} {{ form.trainer_type }}
+        </div>
+
+        <div id="internal-trainer-form" style="display: none;">
+          <div class="mb-3">
+            {{ form.internal_trainer.label_tag }} {{ form.internal_trainer }}
+          </div>
+        </div>
+
+        <div id="external-trainer-form" style="display: none;">
+          <div class="mb-3">
+            {{ external_trainer_form.existing_trainer.label_tag }} {{ external_trainer_form.existing_trainer }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.name.label_tag }} {{ external_trainer_form.name }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.email.label_tag }} {{ external_trainer_form.email }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.phone_number.label_tag }} {{ external_trainer_form.phone_number }}
+          </div>
+          <div class="mb-3">
+            {{ external_trainer_form.city.label_tag }} {{ external_trainer_form.city }}
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="{% url 'create_training' %}" class="btn btn-secondary">Back</a>
+      </form>
+    </div>
+    <div class="col-md-6">
+      <h2>Training Details</h2>
+      <ul class="list-group">
+        <li class="list-group-item"><strong>Training Programme:</strong>
+          {% if training.training_programme %}
+            {{ training.training_programme.title }}
+          {% else %}
+            {{ training.custom_training_programme }}
+          {% endif %}
+        </li>
+        <li class="list-group-item"><strong>Venue:</strong> {{ training.venue.name }}</li>
+        <li class="list-group-item"><strong>Trainer:</strong> {{ training.trainer.name }} - {{ training.trainer.email }}</li>
+        <li class="list-group-item"><strong>Created By:</strong> {{ training.created_by.username }}</li>
+        <li class="list-group-item"><strong>Created At:</strong> {{ training.created_at }}</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const trainerTypeField = document.querySelector('select[name="trainer_type"]');
+    const externalTrainerForm = document.getElementById('external-trainer-form');
+    const internalTrainerForm = document.getElementById('internal-trainer-form');
+    const trainingProgrammeField = document.querySelector('select[name="training_programme"]');
+    const customTrainingProgrammeField = document.querySelector('input[name="custom_training_programme"]');
+    
+    const externalFields = externalTrainerForm.querySelectorAll('input, select');
+
+    trainerTypeField.addEventListener('change', function() {
+      if (this.value === 'External') {
+        externalTrainerForm.style.display = 'block';
+        internalTrainerForm.style.display = 'none';
+        externalFields.forEach(field => {
+          field.required = true;
+        });
+      } else {
+        externalTrainerForm.style.display = 'none';
+        internalTrainerForm.style.display = 'block';
+        externalFields.forEach(field => {
+          field.required = false;
+        });
+      }
+    });
+
+    trainingProgrammeField.addEventListener('change', function() {
+      if (this.value) {
+        customTrainingProgrammeField.disabled = true;
+        customTrainingProgrammeField.value = '';
+      } else {
+        customTrainingProgrammeField.disabled = false;
+      }
+    });
+
+    // Trigger change events to set initial state
+    trainerTypeField.dispatchEvent(new Event('change'));
+    trainingProgrammeField.dispatchEvent(new Event('change'));
+  });
+</script>
+{% endblock %}

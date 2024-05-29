@@ -1,5 +1,5 @@
 from django import forms
-from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser
+from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession
 
 class RequestTrainingForm(forms.ModelForm):
     class Meta:
@@ -110,3 +110,118 @@ class HODTrainingAssignmentForm(forms.ModelForm):
         if not training_programme and not other_training:
             raise forms.ValidationError("You must select a training programme or specify another training.")
         return cleaned_data
+    
+    
+class TrainingCreationForm(forms.ModelForm):
+    trainer_type = forms.ChoiceField(
+        choices=(('Internal', 'Internal'), ('External', 'External')),
+        required=True,
+        label='Trainer Type',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    internal_trainer = forms.ModelChoiceField(
+        queryset=CustomUser.objects.none(),
+        required=False,
+        label='Internal Trainer',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    custom_training_programme = forms.CharField(
+        required=False,
+        label='Other Training Programme',
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    venue_type = forms.ChoiceField(
+        choices=VenueMaster.VENUE_TYPE_CHOICES,
+        required=True,
+        label='Venue Type',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    class Meta:
+        model = TrainingSession
+        fields = ['training_programme', 'custom_training_programme', 'venue_type', 'venue', 'trainer_type', 'internal_trainer', 'date', 'from_time', 'to_time']
+        labels = {
+            'training_programme': 'Training Programme',
+            'venue_type': 'Venue Type',
+            'venue': 'Venue',
+            'date': 'Date',
+            'from_time': 'From Time',
+            'to_time': 'To Time'
+        }
+        widgets = {
+            'training_programme': forms.Select(attrs={'class': 'form-select'}),
+            'venue': forms.Select(attrs={'class': 'form-select'}),
+            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'from_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
+            'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'})
+        }
+
+    def __init__(self, *args, **kwargs):
+        super(TrainingCreationForm, self).__init__(*args, **kwargs)
+        self.fields['internal_trainer'].queryset = CustomUser.objects.filter(
+            card_validity__year__gt=2045
+        ).order_by('employee_name')
+        self.fields['internal_trainer'].label_from_instance = self.label_from_instance
+
+        # Set an initial empty queryset for venues
+        self.fields['venue'].queryset = VenueMaster.objects.none()
+
+        # Populate the venue queryset based on the selected venue_type
+        if 'venue_type' in self.data:
+            try:
+                venue_type = self.data.get('venue_type')
+                self.fields['venue'].queryset = VenueMaster.objects.filter(venue_type=venue_type).order_by('name')
+            except (ValueError, TypeError):
+                pass  # invalid input from the client; ignore and fallback to empty queryset
+        elif self.instance.pk:
+            self.fields['venue'].queryset = self.instance.venue.__class__.objects.all().order_by('name')
+
+    @staticmethod
+    def label_from_instance(obj):
+        return f"{obj.employee_name} - {obj.username}"
+
+class ExternalTrainerForm(forms.ModelForm):
+    existing_trainer = forms.ModelChoiceField(
+        queryset=TrainerMaster.objects.filter(trainer_type='External'),
+        required=False,
+        label='Select Existing Trainer',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    class Meta:
+        model = TrainerMaster
+        fields = ['existing_trainer', 'name', 'email', 'phone_number', 'city']
+        labels = {
+            'name': 'Name',
+            'email': 'Email',
+            'phone_number': 'Phone Number',
+            'city': 'City'
+        }
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'phone_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'city': forms.TextInput(attrs={'class': 'form-control'})
+        }
+
+    def __init__(self, *args, **kwargs):
+        super(ExternalTrainerForm, self).__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['existing_trainer'].queryset = TrainerMaster.objects.filter(trainer_type='External')
+        self.fields['existing_trainer'].label_from_instance = lambda obj: f"{obj.name} ({obj.email})"
+
+
+class TrainingRequestForm(forms.ModelForm):
+    class Meta:
+        model = TrainingSession
+        fields = ['date', 'from_time', 'to_time']
+        labels = {
+            'date': 'Date',
+            'from_time': 'From Time',
+            'to_time': 'To Time'
+        }
+        widgets = {
+            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'from_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
+            'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'})
+        }

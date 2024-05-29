@@ -2,6 +2,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from datetime import date, time
 class Role(models.Model):
     ROLE_CHOICES = (
         ('User', 'User'),
@@ -108,10 +109,19 @@ class TrainingProgramme(models.Model):
         return self.title
     
 class VenueMaster(models.Model):
+    VENUE_TYPE_CHOICES = (
+        ('Classroom', 'Classroom'),
+        ('On Job', 'On Job'),
+        ('External', 'External'),
+        ('Online', 'Online'),
+    )
+
     name = models.CharField(max_length=255)
+    venue_type = models.CharField(max_length=20, choices=VENUE_TYPE_CHOICES, default='Classroom')
 
     def __str__(self):
         return self.name
+
     
 class Status(models.Model):
     name = models.CharField(max_length=50)
@@ -160,3 +170,40 @@ class HODTrainingAssignment(models.Model):
 
     def __str__(self):
         return f"Assignment for {self.assigned_user.employee_name} by {self.hod_user.employee_name}"
+    
+    
+class TrainerMaster(models.Model):
+    TRAINER_TYPE_CHOICES = (
+        ('Internal', 'Internal'),
+        ('External', 'External'),
+    )
+    
+    trainer_type = models.CharField(max_length=10, choices=TRAINER_TYPE_CHOICES)
+    custom_user = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='trainings_conducted')
+    name = models.CharField(max_length=255)
+    email = models.EmailField(blank=True)  # Make email optional
+    phone_number = models.CharField(max_length=20, blank=True)  # Make phone_number optional
+    city = models.CharField(max_length=100, blank=True)  # Make city optional
+    training_programmes = models.ManyToManyField(TrainingProgramme, related_name='trainers')
+
+    def __str__(self):
+        return f"{self.name} ({self.get_trainer_type_display()})"
+
+    
+    
+
+
+
+class TrainingSession(models.Model):
+    training_programme = models.ForeignKey(TrainingProgramme, on_delete=models.CASCADE, null=True, blank=True)
+    custom_training_programme = models.CharField(max_length=255, blank=True)
+    venue = models.ForeignKey(VenueMaster, on_delete=models.CASCADE)
+    trainer = models.ForeignKey(TrainerMaster, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    date = models.DateField(null=True, blank=True)
+    from_time = models.TimeField(null=True, blank=True)
+    to_time = models.TimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name} by {self.trainer.name}"
