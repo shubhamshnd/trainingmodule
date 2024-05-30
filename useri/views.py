@@ -401,64 +401,18 @@ def maker_training_detail(request, training_programme_title):
 @login_required
 def create_training(request):
     if request.method == 'POST':
-        form = TrainingCreationForm(request.POST)
+        form = TrainingCreationForm(request.POST, request.FILES)
         external_trainer_form = ExternalTrainerForm(request.POST)
 
-        if form.is_valid() and (form.cleaned_data['trainer_type'] == 'Internal' or external_trainer_form.is_valid()):
+        if form.is_valid() and (form.cleaned_data['trainer_type'] == 'Internal' or external_trainer_form.is_valid() or form.cleaned_data['venue_type'] == 'Online'):
             training_session = form.save(commit=False)
             trainer_type = form.cleaned_data['trainer_type']
             
-            if trainer_type == 'External':
-                external_trainer = external_trainer_form.save(commit=False)
-                external_trainer.trainer_type = 'External'
-                external_trainer.save()
-                training_session.trainer = external_trainer
-            else:
-                internal_trainer = form.cleaned_data['internal_trainer']
-                if internal_trainer:
-                    training_session.trainer, created = TrainerMaster.objects.get_or_create(
-                        custom_user=internal_trainer,
-                        defaults={
-                            'trainer_type': 'Internal',
-                            'name': internal_trainer.employee_name,
-                            'email': internal_trainer.email,
-                            'phone_number': internal_trainer.contact_no,
-                        }
-                    )
-            
-            training_session.created_by = request.user
-            training_session.save()
-            messages.success(request, "Training session has been created successfully.")
-            return redirect('create_training')
-        else:
-            messages.error(request, "There was an error creating the training session. Please check the form for errors.")
-    else:
-        form = TrainingCreationForm()
-        external_trainer_form = ExternalTrainerForm()
-
-    trainings = TrainingSession.objects.all()  # Adjust this query as needed
-
-    return render(request, 'create_training.html', {
-        'form': form,
-        'external_trainer_form': external_trainer_form,
-        'trainings': trainings,
-    })
-    
-    
-    
-@login_required
-def create_training(request):
-    if request.method == 'POST':
-        form = TrainingCreationForm(request.POST)
-        external_trainer_form = ExternalTrainerForm(request.POST)
-
-        if form.is_valid() and (form.cleaned_data['trainer_type'] == 'Internal' or external_trainer_form.is_valid()):
-            training_session = form.save(commit=False)
-            trainer_type = form.cleaned_data['trainer_type']
-            
-            if trainer_type == 'External':
-                external_trainer = external_trainer_form.cleaned_data['existing_trainer']
-                if (external_trainer):
+            if form.cleaned_data['venue_type'] == 'Online':
+                training_session.trainer = None  # No trainer required for online training
+            elif trainer_type == 'External':
+                external_trainer = external_trainer_form.cleaned_data.get('existing_trainer')
+                if external_trainer:
                     training_session.trainer = external_trainer
                 else:
                     external_trainer = external_trainer_form.save(commit=False)
@@ -498,8 +452,6 @@ def create_training(request):
         'venues': venues,
     })
 
-    
-    
 @login_required
 def edit_training(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)

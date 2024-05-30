@@ -3,9 +3,9 @@
 {% block content %}
 <div class="container">
   <div class="row justify-content-center">
-    <div class="col-md-4" style="max-height: 90vh; overflow-y: auto;">
+    <div class="col-md-3" style="max-height: 90vh; overflow-y: auto;">
       <h2>Create Training Session</h2>
-      <form method="post">
+      <form method="post" enctype="multipart/form-data" id="training-form">
         {% csrf_token %}
         
         <div class="mb-3">
@@ -17,10 +17,16 @@
         <div class="mb-3">
           {{ form.venue_type.label_tag }} {{ form.venue_type }}
         </div>
-        <div class="mb-3">
+        <div class="mb-3" id="venue-selection">
           {{ form.venue.label_tag }} {{ form.venue }}
         </div>
-        <div class="mb-3">
+        <div class="mb-3" id="online-training-link" style="display: none;">
+          {{ form.online_training_link.label_tag }} {{ form.online_training_link }}
+        </div>
+        <div class="mb-3" id="online-training-file" style="display: none;">
+          {{ form.online_training_file.label_tag }} {{ form.online_training_file }}
+        </div>
+        <div class="mb-3" id="trainer-type-selection">
           {{ form.trainer_type.label_tag }} {{ form.trainer_type }}
         </div>
 
@@ -52,43 +58,55 @@
       </form>
     </div>
 
-    <div class="col-md-8">
+    <div class="col-md-9">
       <h2>Created Trainings</h2>
-      <table class="table table-sm" style="font-size: 0.875rem;">
-        <thead>
-          <tr>
-            <th scope="col">Topic</th>
-            <th scope="col">Venue</th>
-            <th scope="col">Trainer</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for training in trainings %}
-          <tr class="text-nowrap">
-            <td>
-              {% if training.training_programme %}
-                {{ training.training_programme.title }}
-              {% else %}
-                {{ training.custom_training_programme }}
-              {% endif %}
-            </td>
-            <td>{{ training.venue.name }}</td>
-            <td>
-              {% if training.trainer %}
-                {{ training.trainer.name }} - {{ training.trainer.email }}
-              {% else %}
-                Not Assigned
-              {% endif %}
-            </td>
-            <td>
-              <a href="{% url 'modify_training' training.id %}" class="btn btn-warning btn-sm">Modify</a>
-              <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Select Participants and Timing</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div style="max-height: 90vh; overflow: auto;">
+        <table class="table table-sm" style="font-size: 0.875rem; min-width : 100%;">
+          <thead>
+            <tr>
+              <th scope="col">Topic</th>
+              <th scope="col">Venue</th>
+              <th scope="col">Trainer</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for training in trainings %}
+            <tr class="text-nowrap">
+              <td>
+                {% if training.training_programme %}
+                  {{ training.training_programme.title }}
+                {% else %}
+                  {{ training.custom_training_programme }}
+                {% endif %}
+              </td>
+              <td>
+                {% if training.venue %}
+                  {{ training.venue.name }}
+                {% else %}
+                  Online Training
+                {% endif %}
+              </td>
+              <td>
+                {% if training.trainer %}
+                  {{ training.trainer.name }} - {{ training.trainer.email }}
+                {% else %}
+                  {% if training.venue and training.venue.venue_type == 'Online' %}
+                    Online Training
+                  {% else %}
+                    Not Assigned
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td>
+                <a href="{% url 'modify_training' training.id %}" class="btn btn-warning btn-sm">Modify</a>
+                <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Select Participants and Schedule</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -102,25 +120,68 @@
     const customTrainingProgrammeField = document.querySelector('input[name="custom_training_programme"]');
     const venueTypeField = document.querySelector('select[name="venue_type"]');
     const venueField = document.querySelector('select[name="venue"]');
+    const venueSelectionField = document.getElementById('venue-selection');
+    const onlineTrainingLinkField = document.getElementById('online-training-link');
+    const onlineTrainingFileField = document.getElementById('online-training-file');
+    const trainerTypeSelectionField = document.getElementById('trainer-type-selection');
+    const form = document.getElementById('training-form');
+    const existingTrainerField = document.querySelector('select[name="existing_trainer"]');
 
-    const externalFields = externalTrainerForm.querySelectorAll('input, select');
+    function handleVenueTypeChange() {
+      const venueType = venueTypeField.value;
+      const venues = {{ venues|safe }};
+      let options = '<option value="">---------</option>';
+      venues.forEach(venue => {
+        if (venue.venue_type === venueType) {
+          options += `<option value="${venue.id}">${venue.name}</option>`;
+        }
+      });
+      venueField.innerHTML = options;
 
-    trainerTypeField.addEventListener('change', function() {
-      if (this.value === 'External') {
+      if (venueType === 'Online') {
+        onlineTrainingLinkField.style.display = 'block';
+        onlineTrainingFileField.style.display = 'block';
+        venueSelectionField.style.display = 'none';
+        trainerTypeSelectionField.style.display = 'none';
+        externalTrainerForm.style.display = 'none';
+        internalTrainerForm.style.display = 'none';
+        venueField.required = false;
+        onlineTrainingFileField.querySelector('input').required = true;
+        trainerTypeField.required = false;
+      } else {
+        onlineTrainingLinkField.style.display = 'none';
+        onlineTrainingFileField.style.display = 'none';
+        venueSelectionField.style.display = 'block';
+        trainerTypeSelectionField.style.display = 'block';
+        handleTrainerTypeChange();
+        venueField.required = true;
+        onlineTrainingFileField.querySelector('input').required = false;
+        trainerTypeField.required = true;
+      }
+    }
+
+    function handleTrainerTypeChange() {
+      if (trainerTypeField.value === 'External') {
         externalTrainerForm.style.display = 'block';
         internalTrainerForm.style.display = 'none';
-        externalFields.forEach(field => {
-          field.required = true;
+        existingTrainerField.required = false;  // Ensure this field is not required
+        externalTrainerForm.querySelectorAll('input, select').forEach(field => {
+          if (field !== existingTrainerField) {
+            field.required = true;
+          }
         });
       } else {
         externalTrainerForm.style.display = 'none';
         internalTrainerForm.style.display = 'block';
-        externalFields.forEach(field => {
+        existingTrainerField.required = false;  // Ensure this field is not required
+        externalTrainerForm.querySelectorAll('input, select').forEach(field => {
           field.required = false;
         });
       }
-    });
+    }
 
+    venueTypeField.addEventListener('change', handleVenueTypeChange);
+    trainerTypeField.addEventListener('change', handleTrainerTypeChange);
     trainingProgrammeField.addEventListener('change', function() {
       if (this.value) {
         customTrainingProgrammeField.disabled = true;
@@ -130,22 +191,17 @@
       }
     });
 
-    venueTypeField.addEventListener('change', function() {
-      const venueType = this.value;
-      const venues = {{ venues|safe }};
-      let options = '<option value="">---------</option>';
-      venues.forEach(venue => {
-        if (venue.venue_type === venueType) {
-          options += `<option value="${venue.id}">${venue.name}</option>`;
-        }
-      });
-      venueField.innerHTML = options;
-    });
-
-    // Trigger change events to set initial state
-    trainerTypeField.dispatchEvent(new Event('change'));
+    handleVenueTypeChange();
+    handleTrainerTypeChange();
     trainingProgrammeField.dispatchEvent(new Event('change'));
-    venueTypeField.dispatchEvent(new Event('change'));
+
+    form.addEventListener('submit', function(event) {
+      if (venueTypeField.value === 'Online') {
+        trainerTypeField.required = false;
+        document.querySelector('select[name="internal_trainer"]').required = false;
+        existingTrainerField.required = false;
+      }
+    });
   });
 </script>
 {% endblock %}

@@ -197,13 +197,16 @@ class TrainerMaster(models.Model):
 class TrainingSession(models.Model):
     training_programme = models.ForeignKey(TrainingProgramme, on_delete=models.CASCADE, null=True, blank=True)
     custom_training_programme = models.CharField(max_length=255, blank=True)
-    venue = models.ForeignKey(VenueMaster, on_delete=models.CASCADE)
-    trainer = models.ForeignKey(TrainerMaster, on_delete=models.CASCADE)
+    venue = models.ForeignKey(VenueMaster, on_delete=models.CASCADE, null=True, blank=True)
+    trainer = models.ForeignKey(TrainerMaster, on_delete=models.CASCADE, null=True, blank=True)
     created_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     date = models.DateField(null=True, blank=True)
     from_time = models.TimeField(null=True, blank=True)
     to_time = models.TimeField(null=True, blank=True)
+    online_training_link = models.URLField(blank=True, null=True)
+    online_training_file = models.FileField(upload_to='online_training_files/', blank=True, null=True)
 
     def __str__(self):
-        return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name} by {self.trainer.name}"
+        return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"
+

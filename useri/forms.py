@@ -111,7 +111,6 @@ class HODTrainingAssignmentForm(forms.ModelForm):
             raise forms.ValidationError("You must select a training programme or specify another training.")
         return cleaned_data
     
-    
 class TrainingCreationForm(forms.ModelForm):
     trainer_type = forms.ChoiceField(
         choices=(('Internal', 'Internal'), ('External', 'External')),
@@ -136,24 +135,36 @@ class TrainingCreationForm(forms.ModelForm):
         label='Venue Type',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+    online_training_link = forms.URLField(
+        required=False,
+        label='Online Training Link',
+        widget=forms.URLInput(attrs={'class': 'form-control'})
+    )
+    online_training_file = forms.FileField(
+        required=False,
+        label='Online Training File',
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control'})
+    )
 
     class Meta:
         model = TrainingSession
-        fields = ['training_programme', 'custom_training_programme', 'venue_type', 'venue', 'trainer_type', 'internal_trainer', 'date', 'from_time', 'to_time']
+        fields = ['training_programme', 'custom_training_programme', 'venue_type', 'venue', 'trainer_type', 'internal_trainer', 'date', 'from_time', 'to_time', 'online_training_link', 'online_training_file']
         labels = {
             'training_programme': 'Training Programme',
             'venue_type': 'Venue Type',
             'venue': 'Venue',
             'date': 'Date',
             'from_time': 'From Time',
-            'to_time': 'To Time'
+            'to_time': 'To Time',
+            'online_training_link': 'Online Training Link',
+            'online_training_file': 'Online Training File'
         }
         widgets = {
             'training_programme': forms.Select(attrs={'class': 'form-select'}),
             'venue': forms.Select(attrs={'class': 'form-select'}),
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'from_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
-            'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'})
+            'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -179,6 +190,20 @@ class TrainingCreationForm(forms.ModelForm):
     @staticmethod
     def label_from_instance(obj):
         return f"{obj.employee_name} - {obj.username}"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        venue_type = cleaned_data.get("venue_type")
+        online_training_link = cleaned_data.get("online_training_link")
+        online_training_file = cleaned_data.get("online_training_file")
+
+        if venue_type == 'Online':
+            if not online_training_link and not online_training_file:
+                raise forms.ValidationError("For online training, either a link or a file is required.")
+            self.fields['internal_trainer'].required = False
+            self.fields['trainer_type'].required = False
+        return cleaned_data
+
 
 class ExternalTrainerForm(forms.ModelForm):
     existing_trainer = forms.ModelChoiceField(
@@ -206,9 +231,9 @@ class ExternalTrainerForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(ExternalTrainerForm, self).__init__(*args, **kwargs)
-        if self.instance and self.instance.pk:
-            self.fields['existing_trainer'].queryset = TrainerMaster.objects.filter(trainer_type='External')
         self.fields['existing_trainer'].label_from_instance = lambda obj: f"{obj.name} ({obj.email})"
+        self.fields['existing_trainer'].required = False  # Ensure this field is not required
+
 
 
 class TrainingRequestForm(forms.ModelForm):
