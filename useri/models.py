@@ -206,6 +206,7 @@ class TrainingSession(models.Model):
     to_time = models.TimeField(null=True, blank=True)
     online_training_link = models.URLField(blank=True, null=True)
     online_training_file = models.FileField(upload_to='online_training_files/', blank=True, null=True)
+    deadline_to_complete = models.DateField(null=True, blank=True)  # Add this line
 
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"

@@ -235,18 +235,19 @@ class ExternalTrainerForm(forms.ModelForm):
         self.fields['existing_trainer'].required = False  # Ensure this field is not required
 
 
-
 class TrainingRequestForm(forms.ModelForm):
     class Meta:
         model = TrainingSession
-        fields = ['date', 'from_time', 'to_time']
+        fields = ['date', 'from_time', 'to_time', 'deadline_to_complete']
         labels = {
             'date': 'Date',
             'from_time': 'From Time',
-            'to_time': 'To Time'
+            'to_time': 'To Time',
+            'deadline_to_complete': 'Deadline to Complete'
         }
         widgets = {
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'from_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
-            'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'})
+            'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
+            'deadline_to_complete': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
         }

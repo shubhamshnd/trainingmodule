@@ -452,6 +452,41 @@ def create_training(request):
         'venues': venues,
     })
 
+
+@login_required
+def send_training_request(request, pk):
+    training = get_object_or_404(TrainingSession, pk=pk)
+    venue_type = training.venue.venue_type if training.venue else 'Online'
+    
+    if request.method == 'POST':
+        form = TrainingRequestForm(request.POST, instance=training)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Training session details updated successfully.")
+            return redirect('create_training')
+        else:
+            messages.error(request, "There was an error updating the training session. Please check the form for errors.")
+    else:
+        form = TrainingRequestForm(instance=training)
+
+    # Get unique departments
+    departments = CustomUser.objects.values_list('department', flat=True).distinct()
+
+    # Get users grouped by role and work_order_no
+    hods = CustomUser.objects.filter(role__name='HOD')
+    associates = CustomUser.objects.filter(work_order_no__isnull=False).exclude(work_order_no='')
+    employees = CustomUser.objects.filter(work_order_no__isnull=True) | CustomUser.objects.filter(work_order_no='')
+
+    return render(request, 'send_training_request.html', {
+        'form': form,
+        'training': training,
+        'venue_type': venue_type,
+        'departments': departments,
+        'hods': hods,
+        'associates': associates,
+        'employees': employees,
+    })
+
 @login_required
 def edit_training(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)
@@ -511,19 +546,3 @@ def delete_training(request, pk):
 
     return render(request, 'delete_training.html', {'training': training})
 
-
-@login_required
-def send_training_request(request, pk):
-    training = get_object_or_404(TrainingSession, pk=pk)
-    if request.method == 'POST':
-        form = TrainingRequestForm(request.POST, instance=training)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Training session details updated successfully.")
-            return redirect('create_training')
-        else:
-            messages.error(request, "There was an error updating the training session. Please check the form for errors.")
-    else:
-        form = TrainingRequestForm(instance=training)
-
-    return render(request, 'send_training_request.html', {'form': form, 'training': training})

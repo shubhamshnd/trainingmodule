@@ -3,39 +3,115 @@
 {% block content %}
 <div class="container">
   <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-md-3">
       <h2>Set Training Date and Time</h2>
       <form method="post">
         {% csrf_token %}
-        <div class="mb-3">
+        {% if venue_type != 'Online' %}
+        <div class="mb-3" id="date-field">
           {{ form.date.label_tag }} {{ form.date }}
         </div>
-        <div class="mb-3">
+        <div class="mb-3" id="from-time-field">
           {{ form.from_time.label_tag }} {{ form.from_time }}
         </div>
-        <div class="mb-3">
+        <div class="mb-3" id="to-time-field">
           {{ form.to_time.label_tag }} {{ form.to_time }}
         </div>
+        {% else %}
+        <div class="mb-3" id="deadline-field">
+          {{ form.deadline_to_complete.label_tag }} {{ form.deadline_to_complete }}
+        </div>
+        {% endif %}
         <button type="submit" class="btn btn-primary">Save</button>
         <a href="{% url 'create_training' %}" class="btn btn-secondary">Back</a>
       </form>
     </div>
-    <div class="col-md-8">
-      <h2>Training Details</h2>
-      <ul class="list-group">
-        <li class="list-group-item"><strong>Training Programme:</strong>
-          {% if training.training_programme %}
-            {{ training.training_programme.title }}
-          {% else %}
-            {{ training.custom_training_programme }}
-          {% endif %}
-        </li>
-        <li class="list-group-item"><strong>Venue:</strong> {{ training.venue.name }}</li>
-        <li class="list-group-item"><strong>Trainer:</strong> {{ training.trainer.name }} - {{ training.trainer.email }}</li>
-        <li class="list-group-item"><strong>Created By:</strong> {{ training.created_by.username }}</li>
-        <li class="list-group-item"><strong>Created At:</strong> {{ training.created_at }}</li>
-      </ul>
+
+    <div class="col-md-9" style="overflow-y: auto; max-height: 85vh;">
+      <h2>Select Users</h2>
+      <div class="form-group">
+        <label for="department-select">Select Department:</label>
+        <select id="department-select" class="form-control">
+          <option value="">Select Department</option>
+          {% for department in departments %}
+          <option value="{{ department }}">{{ department }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div id="user-selection" style="display: none;">
+        <h4>HOD(s)</h4>
+        <ul class="list-group" id="hods-list">
+          {% for hod in hods %}
+          <li class="list-group-item" data-department="{{ hod.department }}">{{ hod.employee_name }} ({{ hod.username }})</li>
+          {% endfor %}
+        </ul>
+        
+        <div class="row">
+          <div class="col-md-6">
+            <h4>Associates</h4>
+            <ul class="list-group" id="associates-list">
+              {% for associate in associates %}
+              <li class="list-group-item" data-department="{{ associate.department }}">{{ associate.employee_name }} ({{ associate.username }})</li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div class="col-md-6">
+            <h4>Employees</h4>
+            <ul class="list-group" id="employees-list">
+              {% for employee in employees %}
+              <li class="list-group-item" data-department="{{ employee.department }}">{{ employee.employee_name }} ({{ employee.username }})</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const departmentSelect = document.getElementById('department-select');
+    const userSelection = document.getElementById('user-selection');
+    const hodsList = document.getElementById('hods-list').children;
+    const associatesList = document.getElementById('associates-list').children;
+    const employeesList = document.getElementById('employees-list').children;
+
+    departmentSelect.addEventListener('change', function() {
+      const selectedDepartment = this.value;
+
+      if (selectedDepartment) {
+        userSelection.style.display = 'block';
+
+        Array.from(hodsList).forEach(item => {
+          if (item.getAttribute('data-department') === selectedDepartment) {
+            item.style.display = 'block';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+
+        Array.from(associatesList).forEach(item => {
+          if (item.getAttribute('data-department') === selectedDepartment) {
+            item.style.display = 'block';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+
+        Array.from(employeesList).forEach(item => {
+          if (item.getAttribute('data-department') === selectedDepartment) {
+            item.style.display = 'block';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+
+      } else {
+        userSelection.style.display = 'none';
+      }
+    });
+  });
+</script>
 {% endblock %}
