@@ -190,9 +190,6 @@ class TrainerMaster(models.Model):
         return f"{self.name} ({self.get_trainer_type_display()})"
 
     
-    
-
-
 
 class TrainingSession(models.Model):
     training_programme = models.ForeignKey(TrainingProgramme, on_delete=models.CASCADE, null=True, blank=True)
@@ -210,4 +207,12 @@ class TrainingSession(models.Model):
 
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"
+
+class AttendanceMaster(models.Model):
+    custom_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    training_session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE)
+    attendance_date = models.DateField()
+
+    def __str__(self):
+        return f"Attendance for {self.custom_user.username} in session {self.training_session}"
 
