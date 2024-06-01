@@ -1,6 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, Role, TrainingProgramme, Status, RequestTraining, VenueMaster
+from .models import (
+    CustomUser, Role, TrainingProgramme, Status, RequestTraining, 
+    VenueMaster, HODTrainingAssignment, TrainerMaster, TrainingSession, AttendanceMaster
+)
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
@@ -25,8 +28,9 @@ class CustomUserAdmin(UserAdmin):
 class RoleAdmin(admin.ModelAdmin):
     list_display = ['name']
     search_fields = ['name']
-    
-    
+    ordering = ['name']
+
+
 class TrainingProgrammeAdmin(admin.ModelAdmin):
     list_display = ['title']
     search_fields = ['title']
@@ -47,9 +51,37 @@ class RequestTrainingAdmin(admin.ModelAdmin):
     
 
 class VenueMasterAdmin(admin.ModelAdmin):
-    list_display = ['name']
+    list_display = ['name', 'venue_type']
     search_fields = ['name']
     ordering = ['name']
+
+
+class HODTrainingAssignmentAdmin(admin.ModelAdmin):
+    list_display = ['hod_user', 'assigned_user', 'training_programme', 'other_training', 'status', 'assignment_date']
+    search_fields = ['hod_user__username', 'assigned_user__username', 'training_programme__title', 'other_training']
+    ordering = ['assignment_date']
+    list_filter = ['status', 'training_programme']
+
+
+class TrainerMasterAdmin(admin.ModelAdmin):
+    list_display = ['name', 'trainer_type']
+    search_fields = ['name', 'trainer_type']
+    ordering = ['name']
+    list_filter = ['trainer_type']
+
+
+class TrainingSessionAdmin(admin.ModelAdmin):
+    list_display = ['training_programme', 'custom_training_programme', 'venue', 'trainer', 'created_by', 'created_at', 'date', 'from_time', 'to_time']
+    search_fields = ['training_programme__title', 'custom_training_programme', 'venue__name', 'trainer__name', 'created_by__username']
+    ordering = ['created_at']
+    list_filter = ['training_programme', 'venue', 'trainer']
+
+
+class AttendanceMasterAdmin(admin.ModelAdmin):
+    list_display = ['custom_user', 'training_session', 'attendance_date']
+    search_fields = ['custom_user__username', 'training_session__training_programme__title']
+    ordering = ['attendance_date']
+    list_filter = ['training_session__training_programme', 'attendance_date']
 
 
 admin.site.register(CustomUser, CustomUserAdmin)
@@ -58,3 +90,7 @@ admin.site.register(TrainingProgramme, TrainingProgrammeAdmin)
 admin.site.register(Status, StatusAdmin)
 admin.site.register(RequestTraining, RequestTrainingAdmin)
 admin.site.register(VenueMaster, VenueMasterAdmin)
+admin.site.register(HODTrainingAssignment, HODTrainingAssignmentAdmin)
+admin.site.register(TrainerMaster, TrainerMasterAdmin)
+admin.site.register(TrainingSession, TrainingSessionAdmin)
+admin.site.register(AttendanceMaster, AttendanceMasterAdmin)

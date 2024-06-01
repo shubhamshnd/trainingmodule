@@ -233,7 +233,9 @@ class ExternalTrainerForm(forms.ModelForm):
         super(ExternalTrainerForm, self).__init__(*args, **kwargs)
         self.fields['existing_trainer'].label_from_instance = lambda obj: f"{obj.name} ({obj.email})"
         self.fields['existing_trainer'].required = False  # Ensure this field is not required
-
+        self.fields['email'].required = False
+        self.fields['phone_number'].required = False
+        self.fields['city'].required = False
 
 class TrainingRequestForm(forms.ModelForm):
     class Meta:

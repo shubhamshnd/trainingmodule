@@ -61,18 +61,18 @@
     <div class="col-md-9">
       <h2>Created Trainings</h2>
       <div style="max-height: 90vh; overflow: auto;">
-        <table class="table table-sm" style="font-size: 0.875rem; min-width : 100%;">
+        <table class="table table-sm" style="font-size: 0.8rem; table-layout: fixed; width: 100%;">
           <thead>
             <tr>
-              <th scope="col">Topic</th>
-              <th scope="col">Venue</th>
-              <th scope="col">Trainer</th>
-              <th scope="col">Actions</th>
+              <th scope="col" style="width: 30%;">Topic</th>
+              <th scope="col" style="width: 20%;">Venue</th>
+              <th scope="col" style="width: 30%;">Trainer</th>
+              <th scope="col" style="width: 20%;">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for training in trainings %}
-            <tr class="text-nowrap">
+            <tr>
               <td>
                 {% if training.training_programme %}
                   {{ training.training_programme.title }}
@@ -99,7 +99,6 @@
                 {% endif %}
               </td>
               <td>
-                
                 <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Select Participants and Schedule</a>
               </td>
             </tr>
@@ -167,7 +166,7 @@
         existingTrainerField.required = false;  // Ensure this field is not required
         externalTrainerForm.querySelectorAll('input, select').forEach(field => {
           if (field !== existingTrainerField) {
-            field.required = true;
+            field.required = false;  // Make email, phone, and city fields not required
           }
         });
       } else {
@@ -175,8 +174,26 @@
         internalTrainerForm.style.display = 'block';
         existingTrainerField.required = false;  // Ensure this field is not required
         externalTrainerForm.querySelectorAll('input, select').forEach(field => {
-          field.required = false;
+          field.required = false;  // Make email, phone, and city fields not required
         });
+      }
+    }
+
+    function autofillExternalTrainerFields() {
+      const selectedTrainerId = existingTrainerField.value;
+      const trainers = {{ trainers|safe }};
+      const selectedTrainer = trainers.find(trainer => trainer.id == selectedTrainerId);
+
+      if (selectedTrainer) {
+        document.querySelector('input[name="name"]').value = selectedTrainer.name;
+        document.querySelector('input[name="email"]').value = selectedTrainer.email;
+        document.querySelector('input[name="phone_number"]').value = selectedTrainer.phone_number;
+        document.querySelector('input[name="city"]').value = selectedTrainer.city;
+      } else {
+        document.querySelector('input[name="name"]').value = '';
+        document.querySelector('input[name="email"]').value = '';
+        document.querySelector('input[name="phone_number"]').value = '';
+        document.querySelector('input[name="city"]').value = '';
       }
     }
 
@@ -190,6 +207,8 @@
         customTrainingProgrammeField.disabled = false;
       }
     });
+
+    existingTrainerField.addEventListener('change', autofillExternalTrainerFields);
 
     handleVenueTypeChange();
     handleTrainerTypeChange();

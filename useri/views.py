@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession
+from .models import CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster
 from django.views.decorators.csrf import csrf_protect
 from django.http import HttpResponse
 from .forms import RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm, HODTrainingAssignmentForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm
@@ -14,6 +14,7 @@ from collections import defaultdict
 from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
 from django.db.models import Q
+from datetime import timedelta
 def easter_egg_page(request):
     context = {
         'range_170': range(170),
@@ -442,17 +443,17 @@ def create_training(request):
         form = TrainingCreationForm()
         external_trainer_form = ExternalTrainerForm()
 
-    trainings = TrainingSession.objects.all()
+    trainings = TrainingSession.objects.all().order_by('-created_at')
     venues = list(VenueMaster.objects.values('id', 'name', 'venue_type'))
+    trainers = list(TrainerMaster.objects.filter(trainer_type='External').values('id', 'name', 'email', 'phone_number', 'city'))
 
     return render(request, 'create_training.html', {
         'form': form,
         'external_trainer_form': external_trainer_form,
         'trainings': trainings,
         'venues': venues,
+        'trainers': trainers,
     })
-
-
 @login_required
 def send_training_request(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)
@@ -473,9 +474,16 @@ def send_training_request(request, pk):
     departments = CustomUser.objects.values_list('department', flat=True).distinct()
 
     # Get users grouped by role and work_order_no
-    hods = CustomUser.objects.filter(role__name='HOD')
+    hods = CustomUser.objects.filter(Q(role__name='HOD') | Q(role__name='Checker')).distinct()
     associates = CustomUser.objects.filter(work_order_no__isnull=False).exclude(work_order_no='')
-    employees = CustomUser.objects.filter(work_order_no__isnull=True) | CustomUser.objects.filter(work_order_no='')
+    employees = CustomUser.objects.filter(Q(work_order_no__isnull=True) | Q(work_order_no=''))
+
+    # Get attendance records
+    two_years_ago = timezone.now().date() - timedelta(days=730)
+    attendances = AttendanceMaster.objects.filter(
+        training_session__training_programme=training.training_programme,
+        attendance_date__gte=two_years_ago
+    ).values_list('custom_user_id', flat=True)
 
     return render(request, 'send_training_request.html', {
         'form': form,
@@ -485,7 +493,9 @@ def send_training_request(request, pk):
         'hods': hods,
         'associates': associates,
         'employees': employees,
+        'attendances': list(attendances),
     })
+
 
 @login_required
 def edit_training(request, pk):
