@@ -4,6 +4,31 @@
 <div class="container">
   <div class="row justify-content-center">
     <div class="col-md-3">
+      <h2>Training Details</h2>
+      <div class="mb-3">
+        <strong>Training Name:</strong> 
+        {% if training.training_programme %}
+          {{ training.training_programme.title }}
+        {% else %}
+          {{ training.custom_training_programme }}
+        {% endif %}
+      </div>
+      <div class="mb-3">
+        <strong>Venue:</strong> 
+        {% if training.venue %}
+          {{ training.venue.name }}
+        {% else %}
+          Online
+        {% endif %}
+      </div>
+      <div class="mb-3">
+        <strong>Trainer:</strong> 
+        {% if training.trainer %}
+          {{ training.trainer.name }}
+        {% else %}
+          N/A
+        {% endif %}
+      </div>
       <h2>Set Training Date and Time</h2>
       <form method="post">
         {% csrf_token %}
@@ -27,7 +52,7 @@
       </form>
     </div>
 
-    <div class="col-md-9" style="overflow-y: auto; max-height: 85vh;">
+    <div class="col-md-6" style="overflow-y: auto; max-height: 85vh;">
       <h2>Select Users</h2>
       <div class="form-group">
         <label for="department-select">Select Department:</label>
@@ -43,7 +68,10 @@
         <h4>HOD(s)</h4>
         <ul class="list-group" id="hods-list">
           {% for hod in hods %}
-          <li class="list-group-item {% if hod.id in attendances %}bg-success text-white{% endif %}" data-department="{{ hod.department }}">{{ hod.employee_name }} ({{ hod.username }})</li>
+          <li class="list-group-item {% if hod.id in attendances %}bg-success text-white{% endif %}" data-department="{{ hod.department }}">
+            <input type="checkbox" class="user-checkbox" data-id="{{ hod.id }}" data-name="{{ hod.employee_name }}" data-department="{{ hod.department }}">
+            {{ hod.employee_name }} ({{ hod.username }})
+          </li>
           {% endfor %}
         </ul>
         
@@ -51,8 +79,11 @@
           <div class="col-md-6">
             <h4>Associates</h4>
             <ul class="list-group" id="associates-list">
-              {% for associate in associates %}
-              <li class="list-group-item {% if associate.id in attendances %}bg-success text-white{% endif %}" data-department="{{ associate.department }}">{{ associate.employee_name }} ({{ associate.username }})</li>
+              {% for associate in associates|dictsort:"contractor_name" %}
+              <li class="list-group-item {% if associate.id in attendances %}bg-success text-white{% endif %}" data-department="{{ associate.department }}">
+                <input type="checkbox" class="user-checkbox" data-id="{{ associate.id }}" data-name="{{ associate.employee_name }}" data-department="{{ associate.department }}">
+                {{ associate.employee_name }} - {{ associate.username }} - {{ associate.contractor_name }}
+              </li>
               {% endfor %}
             </ul>
           </div>
@@ -60,15 +91,37 @@
             <h4>Employees</h4>
             <ul class="list-group" id="employees-list">
               {% for employee in employees %}
-              <li class="list-group-item {% if employee.id in attendances %}bg-success text-white{% endif %}" data-department="{{ employee.department }}">{{ employee.employee_name }} ({{ employee.username }})</li>
+              {% if employee.role.name != 'HOD' and employee.role.name != 'Checker' %}
+              <li class="list-group-item {% if employee.id in attendances %}bg-success text-white{% endif %}" data-department="{{ employee.department }}">
+                <input type="checkbox" class="user-checkbox" data-id="{{ employee.id }}" data-name="{{ employee.employee_name }}" data-department="{{ employee.department }}">
+                {{ employee.employee_name }} ({{ employee.username }})
+              </li>
+              {% endif %}
               {% endfor %}
             </ul>
           </div>
         </div>
       </div>
     </div>
+
+    <div class="col-md-3">
+      <h3>Selected Users (<span id="total-selected">0</span>)</h3>
+      <div class="selected-users-list" id="selected-users-list">
+        <!-- Selected users will be displayed here -->
+      </div>
+      
+    </div>
   </div>
 </div>
+
+<style>
+  .selected-users-list {
+    max-height: 85vh;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+  }
+</style>
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
@@ -77,6 +130,8 @@
     const hodsList = document.getElementById('hods-list').children;
     const associatesList = document.getElementById('associates-list').children;
     const employeesList = document.getElementById('employees-list').children;
+    const selectedUsersList = document.getElementById('selected-users-list');
+    const totalSelected = document.getElementById('total-selected');
 
     departmentSelect.addEventListener('change', function() {
       const selectedDepartment = this.value;
@@ -111,6 +166,46 @@
       } else {
         userSelection.style.display = 'none';
       }
+    });
+
+    function updateSelectedUsersList() {
+      const selectedUsers = document.querySelectorAll('.user-checkbox:checked');
+      selectedUsersList.innerHTML = '';
+      let totalCount = 0;
+      const departmentCounts = {};
+
+      selectedUsers.forEach(item => {
+        const department = item.getAttribute('data-department');
+        if (!departmentCounts[department]) {
+          departmentCounts[department] = {
+            count: 0,
+            users: []
+          };
+        }
+        departmentCounts[department].count++;
+        departmentCounts[department].users.push(item.getAttribute('data-name'));
+        totalCount++;
+      });
+
+      totalSelected.textContent = totalCount;
+      selectedUsersList.innerHTML = '';
+
+      for (const [department, { count, users }] of Object.entries(departmentCounts)) {
+        const departmentItem = document.createElement('div');
+        departmentItem.innerHTML = `<strong>${department}: ${count}</strong>`;
+        const userList = document.createElement('ul');
+        users.forEach(user => {
+          const userItem = document.createElement('li');
+          userItem.textContent = user;
+          userList.appendChild(userItem);
+        });
+        departmentItem.appendChild(userList);
+        selectedUsersList.appendChild(departmentItem);
+      }
+    }
+
+    document.querySelectorAll('.user-checkbox').forEach(item => {
+      item.addEventListener('change', updateSelectedUsersList);
     });
   });
 </script>
