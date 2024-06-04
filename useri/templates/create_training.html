@@ -99,8 +99,12 @@
                 {% endif %}
               </td>
               <td>
-                <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Select Participants and Schedule</a>
-              </td>
+                {% if training.is_completed %}
+                  Completed
+                {% else %}
+                  <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Select Participants and Schedule</a>
+                {% endif %}
+              </td>              
             </tr>
             {% endfor %}
           </tbody>

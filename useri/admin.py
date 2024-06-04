@@ -32,9 +32,11 @@ class RoleAdmin(admin.ModelAdmin):
 
 
 class TrainingProgrammeAdmin(admin.ModelAdmin):
-    list_display = ['title']
+    list_display = ['title', 'validity']
     search_fields = ['title']
     ordering = ['title']
+    fields = ['title', 'validity']  # Include validity in the admin form
+    list_filter = ['validity']  # Optionally, you can add a filter for validity
 
 
 class StatusAdmin(admin.ModelAdmin):

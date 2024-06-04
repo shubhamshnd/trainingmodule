@@ -104,6 +104,7 @@ class CustomUser(AbstractUser):
     
 class TrainingProgramme(models.Model):
     title = models.CharField(max_length=255)
+    validity = models.IntegerField(default=2)  # Validity in years
 
     def __str__(self):
         return self.title
@@ -203,7 +204,12 @@ class TrainingSession(models.Model):
     to_time = models.TimeField(null=True, blank=True)
     online_training_link = models.URLField(blank=True, null=True)
     online_training_file = models.FileField(upload_to='online_training_files/', blank=True, null=True)
-    deadline_to_complete = models.DateField(null=True, blank=True)  # Add this line
+    deadline_to_complete = models.DateField(null=True, blank=True)
+    selected_participants = models.ManyToManyField(CustomUser, related_name='selected_trainings', blank=True)
+
+    @property
+    def is_completed(self):
+        return AttendanceMaster.objects.filter(training_session=self, custom_user__in=self.selected_participants.all()).exists()
 
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"

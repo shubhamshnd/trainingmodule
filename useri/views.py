@@ -408,7 +408,7 @@ def create_training(request):
         if form.is_valid() and (form.cleaned_data['trainer_type'] == 'Internal' or external_trainer_form.is_valid() or form.cleaned_data['venue_type'] == 'Online'):
             training_session = form.save(commit=False)
             trainer_type = form.cleaned_data['trainer_type']
-            
+
             if form.cleaned_data['venue_type'] == 'Online':
                 training_session.trainer = None  # No trainer required for online training
             elif trainer_type == 'External':
@@ -432,7 +432,7 @@ def create_training(request):
                             'phone_number': internal_trainer.contact_no,
                         }
                     )
-            
+
             training_session.created_by = request.user
             training_session.save()
             messages.success(request, "Training session has been created successfully.")
@@ -458,11 +458,15 @@ def create_training(request):
 def send_training_request(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)
     venue_type = training.venue.venue_type if training.venue else 'Online'
-    
+
     if request.method == 'POST':
         form = TrainingRequestForm(request.POST, instance=training)
         if form.is_valid():
-            form.save()
+            training = form.save(commit=False)
+            selected_users_ids = request.POST.getlist('selected_users')
+            selected_users = CustomUser.objects.filter(id__in=selected_users_ids)
+            training.selected_participants.set(selected_users)
+            training.save()
             messages.success(request, "Training session details updated successfully.")
             return redirect('create_training')
         else:
@@ -470,20 +474,20 @@ def send_training_request(request, pk):
     else:
         form = TrainingRequestForm(instance=training)
 
-    # Get unique departments
     departments = CustomUser.objects.values_list('department', flat=True).distinct()
-
-    # Get users grouped by role and work_order_no
     hods = CustomUser.objects.filter(Q(role__name='HOD') | Q(role__name='Checker')).distinct()
     associates = CustomUser.objects.filter(work_order_no__isnull=False).exclude(work_order_no='')
     employees = CustomUser.objects.filter(Q(work_order_no__isnull=True) | Q(work_order_no=''))
 
-    # Get attendance records
-    two_years_ago = timezone.now().date() - timedelta(days=730)
-    attendances = AttendanceMaster.objects.filter(
-        training_session__training_programme=training.training_programme,
-        attendance_date__gte=two_years_ago
-    ).values_list('custom_user_id', flat=True)
+    if training.training_programme:
+        validity_period = training.training_programme.validity
+        valid_date = timezone.now().date() - timedelta(days=365 * validity_period)
+        attendances = AttendanceMaster.objects.filter(
+            training_session__training_programme=training.training_programme,
+            attendance_date__gte=valid_date
+        ).values_list('custom_user_id', flat=True)
+    else:
+        attendances = []
 
     return render(request, 'send_training_request.html', {
         'form': form,
@@ -495,7 +499,6 @@ def send_training_request(request, pk):
         'employees': employees,
         'attendances': list(attendances),
     })
-
 
 @login_required
 def edit_training(request, pk):

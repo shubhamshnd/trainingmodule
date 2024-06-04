@@ -69,7 +69,7 @@
         <ul class="list-group" id="hods-list">
           {% for hod in hods %}
           <li class="list-group-item {% if hod.id in attendances %}bg-success text-white{% endif %}" data-department="{{ hod.department }}">
-            <input type="checkbox" class="user-checkbox" data-id="{{ hod.id }}" data-name="{{ hod.employee_name }}" data-department="{{ hod.department }}">
+            <input type="checkbox" name="selected_users" value="{{ hod.id }}" class="user-checkbox" data-id="{{ hod.id }}" data-name="{{ hod.employee_name }}" data-department="{{ hod.department }}">
             {{ hod.employee_name }} ({{ hod.username }})
           </li>
           {% endfor %}
@@ -81,7 +81,7 @@
             <ul class="list-group" id="associates-list">
               {% for associate in associates|dictsort:"contractor_name" %}
               <li class="list-group-item {% if associate.id in attendances %}bg-success text-white{% endif %}" data-department="{{ associate.department }}">
-                <input type="checkbox" class="user-checkbox" data-id="{{ associate.id }}" data-name="{{ associate.employee_name }}" data-department="{{ associate.department }}">
+                <input type="checkbox" name="selected_users" value="{{ associate.id }}" class="user-checkbox" data-id="{{ associate.id }}" data-name="{{ associate.employee_name }}" data-department="{{ associate.department }}">
                 {{ associate.employee_name }} - {{ associate.username }} - {{ associate.contractor_name }}
               </li>
               {% endfor %}
@@ -93,7 +93,7 @@
               {% for employee in employees %}
               {% if employee.role.name != 'HOD' and employee.role.name != 'Checker' %}
               <li class="list-group-item {% if employee.id in attendances %}bg-success text-white{% endif %}" data-department="{{ employee.department }}">
-                <input type="checkbox" class="user-checkbox" data-id="{{ employee.id }}" data-name="{{ employee.employee_name }}" data-department="{{ employee.department }}">
+                <input type="checkbox" name="selected_users" value="{{ employee.id }}" class="user-checkbox" data-id="{{ employee.id }}" data-name="{{ employee.employee_name }}" data-department="{{ employee.department }}">
                 {{ employee.employee_name }} ({{ employee.username }})
               </li>
               {% endif %}
