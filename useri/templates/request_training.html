@@ -1,4 +1,4 @@
-{% extends 'userbase.html' %}
+{% extends 'base.html' %}
 
 {% block title %}Request Training{% endblock %}
 {% block extrastyles %}
@@ -34,7 +34,19 @@
                     <label for="user_comment" class="form-label">Comment</label>
                     {{ form.user_comment }}
                 </div>
-                <button type="submit" class="btn btn-primary">Submit Request</button>
+                {% if select_superior %}
+                    <div class="mb-3">
+                        <label for="superior" class="form-label">Select Superior</label>
+                        <select class="form-select" name="superior_id" required>
+                            {% for superior in superiors %}
+                                <option value="{{ superior.id }}">{{ superior.employee_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit to Superior</button>
+                {% else %}
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
+                {% endif %}
             </form>
         </div>
         <div class="col-md-9">

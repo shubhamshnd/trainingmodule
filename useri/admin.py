@@ -1,34 +1,29 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from .forms import DepartmentAdminForm
 from .models import (
-    CustomUser, Role, TrainingProgramme, Status, RequestTraining, 
-    VenueMaster, HODTrainingAssignment, TrainerMaster, TrainingSession, AttendanceMaster
+    CustomUser, TrainingProgramme, RequestTraining, 
+    VenueMaster, TrainerMaster, TrainingSession, AttendanceMaster, Department
 )
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    list_display = ['username', 'employee_name', 'employee_id', 'role']
+    list_display = ['username', 'employee_name', 'employee_id', 'can_assign_trainings', 'is_maker', 'is_checker']
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
-        ('Personal Info', {'fields': ('email', 'employee_id', 'employee_name', 'gender', 'date_of_birth', 'blood_group', 'marital_status', 'weight', 'height', 'date_of_joining', 'designation', 'department', 'grade', 'work_order_no', 'work_order_expiry_date', 'item_code', 'contractor_name', 'sub_contractor_name', 'under_sub_contractor_name', 'category', 'pf_code', 'uan_no_pf', 'pf_no', 'pan_no', 'lic_policy_no', 'shift_group', 'section', 'identification_mark_1', 'identification_mark_2', 'contact_no', 'emergency_contact_person', 'emergency_contact_no', 'card_active_status', 'date_of_leaving', 'card_validity', 'card_status', 'esi_no', 'address', 'pin_code', 'taluka', 'district', 'state', 'per_address', 'per_pin_code', 'per_taluka', 'per_district', 'per_state', 'poi', 'poino', 'poa', 'poano', 'bank_name', 'branch_name', 'account_number')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions', 'role')}),
+        ('Personal Info', {'fields': ('email', 'employee_id', 'employee_name', 'gender', 'date_of_birth', 'blood_group')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions', 'can_assign_trainings', 'is_maker', 'is_checker')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'password1', 'password2', 'email', 'employee_id', 'role'),
+            'fields': ('username', 'password1', 'password2', 'email', 'employee_id'),
         }),
     )
     search_fields = ('username', 'email', 'employee_id', 'employee_name')
     ordering = ('username',)
-    filter_horizontal = ('groups', 'user_permissions',)
-
-
-class RoleAdmin(admin.ModelAdmin):
-    list_display = ['name']
-    search_fields = ['name']
-    ordering = ['name']
+    filter_horizontal = ('groups', 'user_permissions')
 
 
 class TrainingProgrammeAdmin(admin.ModelAdmin):
@@ -37,12 +32,6 @@ class TrainingProgrammeAdmin(admin.ModelAdmin):
     ordering = ['title']
     fields = ['title', 'validity']  # Include validity in the admin form
     list_filter = ['validity']  # Optionally, you can add a filter for validity
-
-
-class StatusAdmin(admin.ModelAdmin):
-    list_display = ['name']
-    search_fields = ['name']
-    ordering = ['name']
 
 
 class RequestTrainingAdmin(admin.ModelAdmin):
@@ -56,13 +45,6 @@ class VenueMasterAdmin(admin.ModelAdmin):
     list_display = ['name', 'venue_type']
     search_fields = ['name']
     ordering = ['name']
-
-
-class HODTrainingAssignmentAdmin(admin.ModelAdmin):
-    list_display = ['hod_user', 'assigned_user', 'training_programme', 'other_training', 'status', 'assignment_date']
-    search_fields = ['hod_user__username', 'assigned_user__username', 'training_programme__title', 'other_training']
-    ordering = ['assignment_date']
-    list_filter = ['status', 'training_programme']
 
 
 class TrainerMasterAdmin(admin.ModelAdmin):
@@ -86,13 +68,37 @@ class AttendanceMasterAdmin(admin.ModelAdmin):
     list_filter = ['training_session__training_programme', 'attendance_date']
 
 
+class DepartmentAdmin(admin.ModelAdmin):
+    form = DepartmentAdminForm
+    list_display = ['name', 'parent', 'head']
+    search_fields = ['name', 'head__username']
+    ordering = ['name']
+    list_filter = ['parent', 'head']
+    filter_horizontal = ('members',)
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields['head'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"
+        form.base_fields['members'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"
+        return form
+
+    class Media:
+        css = {
+            'all': ('admin/css/widgets.css',),  # This is to style the widget properly
+        }
+        js = ('admin/js/vendor/jquery/jquery.js', 'admin/js/vendor/select2/select2.full.js', 'admin/js/core.js')
+
+
 admin.site.register(CustomUser, CustomUserAdmin)
-admin.site.register(Role, RoleAdmin)
 admin.site.register(TrainingProgramme, TrainingProgrammeAdmin)
-admin.site.register(Status, StatusAdmin)
 admin.site.register(RequestTraining, RequestTrainingAdmin)
 admin.site.register(VenueMaster, VenueMasterAdmin)
-admin.site.register(HODTrainingAssignment, HODTrainingAssignmentAdmin)
 admin.site.register(TrainerMaster, TrainerMasterAdmin)
 admin.site.register(TrainingSession, TrainingSessionAdmin)
 admin.site.register(AttendanceMaster, AttendanceMasterAdmin)
+admin.site.register(Department, DepartmentAdmin)
+
+# Remove Role, Status, and HODTrainingAssignment from admin interface
+# admin.site.unregister(Role)
+# admin.site.unregister(Status)
+# admin.site.unregister(HODTrainingAssignment)  

@@ -1,5 +1,6 @@
 from django import forms
-from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession
+from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining
+from django.contrib.admin.widgets import FilteredSelectMultiple
 
 class RequestTrainingForm(forms.ModelForm):
     class Meta:
@@ -25,7 +26,6 @@ class RequestTrainingForm(forms.ModelForm):
         if not training_programme and not other_training:
             raise forms.ValidationError("You must select a training programme or specify another training.")
         return cleaned_data
-
 
 class TrainingRequestApprovalForm(forms.Form):
     request_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)
@@ -72,8 +72,7 @@ class CheckerApprovalForm(forms.Form):
 
         return cleaned_data
 
-
-class HODTrainingAssignmentForm(forms.ModelForm):
+class SuperiorAssignmentForm(forms.ModelForm):
     assigned_users = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
         widget=forms.CheckboxSelectMultiple,
@@ -81,23 +80,22 @@ class HODTrainingAssignmentForm(forms.ModelForm):
     )
 
     class Meta:
-        model = HODTrainingAssignment
+        model = SuperiorAssignedTraining
         fields = ['assigned_users', 'training_programme', 'other_training', 'hod_comment']
         widgets = {
-            'training_programme': forms.Select(attrs={'class': 'form-select'}),
-            'other_training': forms.TextInput(attrs={'class': 'form-control'}),
+            'training_programme': forms.Select(attrs={'class': 'form-select', 'id': 'id_training_programme'}),
+            'other_training': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_other_training'}),
             'hod_comment': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
         }
 
     def __init__(self, *args, **kwargs):
-        hod_user = kwargs.pop('hod_user', None)
+        superior_user = kwargs.pop('superior_user', None)
         super().__init__(*args, **kwargs)
-        if hod_user:
-            self.fields['assigned_users'].queryset = CustomUser.objects.filter(department=hod_user.department)
+        if superior_user:
+            self.fields['assigned_users'].queryset = CustomUser.objects.filter(user_departments__in=superior_user.headed_departments.all()).distinct()
             self.fields['assigned_users'].label_from_instance = self.label_from_instance
         self.fields['training_programme'].queryset = TrainingProgramme.objects.all()
         self.fields['training_programme'].required = False
-        self.fields['other_training'].required = False
 
     def label_from_instance(self, obj):
         return f"{obj.username} - {obj.employee_name}"
@@ -253,3 +251,40 @@ class TrainingRequestForm(forms.ModelForm):
             'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
             'deadline_to_complete': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
         }
+        
+        
+class DepartmentAdminForm(forms.ModelForm):
+    class Meta:
+        model = Department
+        fields = '__all__'
+
+    head = forms.ModelChoiceField(
+        queryset=CustomUser.objects.all().order_by('employee_name'),
+        widget=forms.Select,
+        label="Head",
+    )
+
+    members = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.all().order_by('employee_name'),
+        widget=FilteredSelectMultiple("Members", is_stacked=False),
+        label="Members",
+        required=False,  # Make the members field optional
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['head'].queryset = CustomUser.objects.all().order_by('employee_name')
+        self.fields['members'].queryset = CustomUser.objects.all().order_by('employee_name')
+
+    def clean_head(self):
+        head = self.cleaned_data.get('head')
+        if head and not head.is_active:
+            raise forms.ValidationError("Selected head is not an active user.")
+        return head
+
+    def clean_members(self):
+        members = self.cleaned_data.get('members')
+        inactive_members = members.filter(is_active=False)
+        if inactive_members.exists():
+            raise forms.ValidationError("One or more selected members are not active users.")
+        return members

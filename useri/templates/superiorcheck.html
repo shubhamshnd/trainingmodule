@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+{% block title %}Superior Check Requests{% endblock %}
+
+{% block content %}
+<div class="container">
+    {% if messages %}
+        <div class="alert alert-info" role="alert">
+            {% for message in messages %}
+                <p>{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if form.errors %}
+        <div class="alert alert-danger">
+            <strong>Error:</strong>
+            <ul>
+            {% for field, errors in form.errors.items %}
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-3">
+            <h2>Assign Training</h2>
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="assigned_users" class="form-label">Select Users</label>
+                    <div style="max-height: 20vh; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
+                        {{ assignment_form.assigned_users }}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="training_programme" class="form-label">Select Training Programme</label>
+                    {{ assignment_form.training_programme }}
+                </div>
+                <div class="mb-3">
+                    <label for="other_training" class="form-label">Other Training Programme</label>
+                    {{ assignment_form.other_training }}
+                </div>
+                <div class="mb-3">
+                    <label for="hod_comment" class="form-label">Comment</label>
+                    {{ assignment_form.hod_comment }}
+                </div>
+                <button type="submit" class="btn btn-primary">Assign Training</button>
+            </form>
+        </div>
+        <div class="col-md-9">
+            <h2>Check Training Requests</h2>
+            <div class="scrollable-table">
+                <table class="table table-primary table-striped">
+                    <thead>
+                        <tr>
+                            <th scope="col">User</th>
+                            <th scope="col">Training Programme</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Request Date</th>
+                            <th scope="col">Comments</th>
+                            <th scope="col">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for request in combined_requests %}
+                        <tr>
+                            <td>{{ request.custom_user.employee_name }}</td>
+                            <td>
+                                {% if request.training_programme %}
+                                    {{ request.training_programme.title }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ request.status.name }}</td>
+                            <td>{{ request.request_date }}</td>
+                            <td>{{ request.user_comment }}</td>
+                            <td>
+                                <form method="post" action="{% url 'superior_approve_request' %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="request_id" value="{{ request.id }}">
+                                    <input type="hidden" name="status_id" value="2"> <!-- Assuming 2 is the ID for approved status -->
+                                    <textarea name="hod_comment" class="form-control" placeholder="Add comment"></textarea>
+                                    <button type="submit" class="btn btn-success">Approve</button>
+                                </form>
+                                <form method="post" action="{% url 'superior_reject_request' %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="request_id" value="{{ request.id }}">
+                                    <input type="hidden" name="status_id" value="3"> <!-- Assuming 3 is the ID for rejected status -->
+                                    <textarea name="hod_comment" class="form-control" placeholder="Add comment"></textarea>
+                                    <button type="submit" class="btn btn-danger">Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7">No training requests found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for selecting higher-level superior -->
+    {% if select_higher_superior %}
+    <div class="modal fade" id="higherSuperiorModal" tabindex="-1" aria-labelledby="higherSuperiorModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="higherSuperiorModalLabel">Select Higher-Level Superior</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="post" action="{% url 'assign_higher_superior' %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="higher_superior" class="form-label">Select Higher-Level Superior</label>
+                            <select class="form-select" name="higher_superior_id" required>
+                                {% for superior in higher_superiors %}
+                                    <option value="{{ superior.id }}">{{ superior.employee_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit to Higher Superior</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        var modal = new bootstrap.Modal(document.getElementById('higherSuperiorModal'));
+        modal.show();
+    </script>
+    {% endif %}
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const trainingProgrammeSelect = document.getElementById('id_training_programme');
+        const otherTrainingInput = document.getElementById('id_other_training');
+
+        function toggleOtherTraining() {
+            if (trainingProgrammeSelect.value) {
+                otherTrainingInput.disabled = true;
+                otherTrainingInput.value = '';
+            } else {
+                otherTrainingInput.disabled = false;
+            }
+        }
+
+        trainingProgrammeSelect.addEventListener('change', toggleOtherTraining);
+        toggleOtherTraining(); // Initial check
+    });
+</script>
+{% endblock %}

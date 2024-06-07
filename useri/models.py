@@ -1,8 +1,8 @@
-
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
-from datetime import date, time
+
+
 class Role(models.Model):
     ROLE_CHOICES = (
         ('User', 'User'),
@@ -46,18 +46,7 @@ class CustomUser(AbstractUser):
     pf_no = models.CharField(max_length=20, blank=True)
     pan_no = models.CharField(max_length=20, blank=True)
     lic_policy_no = models.CharField(max_length=20, blank=True)
-    shift_group = models.CharField(max_length=20, blank=True)
-    section = models.CharField(max_length=20, blank=True)
-    identification_mark_1 = models.CharField(max_length=100, blank=True)
-    identification_mark_2 = models.CharField(max_length=100, blank=True)
-    email = models.EmailField(blank=True)
-    contact_no = models.CharField(max_length=20, blank=True)
-    emergency_contact_person = models.CharField(max_length=100, blank=True)
-    emergency_contact_no = models.CharField(max_length=20, blank=True)
-    card_active_status = models.CharField(max_length=20, blank=True)
-    date_of_leaving = models.DateField(null=True, blank=True)
-    card_validity = models.DateField(null=True, blank=True)
-    card_status = models.CharField(max_length=20, blank=True)
+    passport_no = models.CharField(max_length=20, blank=True)
     esi_no = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     pin_code = models.CharField(max_length=10, blank=True)
@@ -77,38 +66,55 @@ class CustomUser(AbstractUser):
     branch_name = models.CharField(max_length=100, blank=True)
     account_number = models.CharField(max_length=50, blank=True)
     selected = models.BooleanField(default=False)
+    
+    can_assign_trainings = models.BooleanField(default=False)
+    is_maker = models.BooleanField(default=False)
+    is_checker = models.BooleanField(default=False)
 
     # Foreign key to Role model
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
 
+    # Many-to-many relationship with Department
+    departments = models.ManyToManyField('Department', related_name='department_members', blank=True)
+
     # Specify unique related_name for groups and user_permissions
-    # This resolves the clashes between CustomUser and built-in User model
     groups = models.ManyToManyField(
         'auth.Group',
         verbose_name='groups',
         blank=True,
-        related_name='customuser_set',  # Change this to a unique related_name
+        related_name='customuser_set',
         related_query_name='customuser',
     )
     user_permissions = models.ManyToManyField(
         'auth.Permission',
         verbose_name='user permissions',
         blank=True,
-        related_name='customuser_set',  # Change this to a unique related_name
+        related_name='customuser_set',
         related_query_name='customuser',
     )
 
     def __str__(self):
-        return self.username
-    
-    
+        return f"{self.employee_name} - {self.username}"
+
+
+class Department(models.Model):
+    name = models.CharField(max_length=100)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='sub_departments')
+    head = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='headed_departments')
+    members = models.ManyToManyField(CustomUser, related_name='user_departments', blank=True)
+
+    def __str__(self):
+        return self.name
+
+
 class TrainingProgramme(models.Model):
     title = models.CharField(max_length=255)
     validity = models.IntegerField(default=2)  # Validity in years
 
     def __str__(self):
         return self.title
-    
+
+
 class VenueMaster(models.Model):
     VENUE_TYPE_CHOICES = (
         ('Classroom', 'Classroom'),
@@ -123,7 +129,7 @@ class VenueMaster(models.Model):
     def __str__(self):
         return self.name
 
-    
+
 class Status(models.Model):
     name = models.CharField(max_length=50)
 
@@ -136,24 +142,28 @@ class RequestTraining(models.Model):
     training_programme = models.ForeignKey(TrainingProgramme, null=True, blank=True, on_delete=models.SET_NULL)
     other_training = models.CharField(max_length=255, blank=True)
     user_comment = models.TextField(blank=True)
-    hod_comment = models.TextField(blank=True)
-    checker_comment = models.TextField(blank=True)
     status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True)
     request_date = models.DateTimeField(auto_now_add=True)
-    hod_approval_timestamp = models.DateTimeField(null=True, blank=True)
-    checker_approval_timestamp = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
-    hod_user = models.ForeignKey(CustomUser, related_name='hod_requests', on_delete=models.SET_NULL, null=True, blank=True)  # New field
+    final_approval_timestamp = models.DateTimeField(null=True, blank=True)  # Track the final approval
 
     def __str__(self):
         return f"Request by {self.custom_user.username} for {self.training_programme if self.training_programme else self.other_training}"
 
-    
-    
+
+class Approval(models.Model):
+    request_training = models.ForeignKey(RequestTraining, on_delete=models.CASCADE, related_name='approvals')
+    approver = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    comment = models.TextField(blank=True)
+    approval_timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Approval by {self.approver.username} for request {self.request_training.id}"
+
 
 class HODTrainingAssignment(models.Model):
     hod_user = models.ForeignKey(CustomUser, related_name='assignments_by_hod', on_delete=models.CASCADE)
-    assigned_user = models.ForeignKey(CustomUser, related_name='assigned_trainings', on_delete=models.CASCADE)
+    assigned_user = models.ForeignKey(CustomUser, related_name='assigned_trainings_hod', on_delete=models.CASCADE)
     training_programme = models.ForeignKey(TrainingProgramme, null=True, blank=True, on_delete=models.SET_NULL)
     other_training = models.CharField(max_length=255, blank=True)
     hod_comment = models.TextField(blank=True)
@@ -161,36 +171,35 @@ class HODTrainingAssignment(models.Model):
     assignment_date = models.DateTimeField(auto_now_add=True)
     checker_comment = models.TextField(blank=True)
     checker_approval_timestamp = models.DateTimeField(null=True, blank=True)
-    hod_approval_timestamp = models.DateTimeField(null=True, blank=True)  # New field
+    hod_approval_timestamp = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.id:
             self.status = Status.objects.get(name='HODapproved')
-            self.hod_approval_timestamp = timezone.now()  # Set HOD approval timestamp when first created
+            self.hod_approval_timestamp = timezone.now()
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Assignment for {self.assigned_user.employee_name} by {self.hod_user.employee_name}"
-    
-    
+
+
 class TrainerMaster(models.Model):
     TRAINER_TYPE_CHOICES = (
         ('Internal', 'Internal'),
         ('External', 'External'),
     )
-    
+
     trainer_type = models.CharField(max_length=10, choices=TRAINER_TYPE_CHOICES)
     custom_user = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='trainings_conducted')
     name = models.CharField(max_length=255)
-    email = models.EmailField(blank=True)  # Make email optional
-    phone_number = models.CharField(max_length=20, blank=True)  # Make phone_number optional
-    city = models.CharField(max_length=100, blank=True)  # Make city optional
+    email = models.EmailField(blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    city = models.CharField(max_length=100, blank=True)
     training_programmes = models.ManyToManyField(TrainingProgramme, related_name='trainers')
 
     def __str__(self):
         return f"{self.name} ({self.get_trainer_type_display()})"
 
-    
 
 class TrainingSession(models.Model):
     training_programme = models.ForeignKey(TrainingProgramme, on_delete=models.CASCADE, null=True, blank=True)
@@ -214,6 +223,7 @@ class TrainingSession(models.Model):
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"
 
+
 class AttendanceMaster(models.Model):
     custom_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     training_session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE)
@@ -222,3 +232,13 @@ class AttendanceMaster(models.Model):
     def __str__(self):
         return f"Attendance for {self.custom_user.username} in session {self.training_session}"
 
+
+class SuperiorAssignedTraining(models.Model):
+    assigned_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='superior_assigned_trainings')
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='superior_assigned_trainings')
+    training_programme = models.ForeignKey(TrainingProgramme, on_delete=models.CASCADE, related_name='superior_assigned_trainings')
+    other_training = models.CharField(max_length=255, blank=True)  # Add this field if not already present
+    hod_comment = models.TextField(blank=True)  # Add this field if not already present
+
+    def __str__(self):
+        return f"{self.assigned_by} - {self.department}"

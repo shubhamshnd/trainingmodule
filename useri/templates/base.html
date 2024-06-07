@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Meta tags -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Training Management App{% endblock %}</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+
+  <style>
+    body {
+      font-size: 14px;
+      background-color: #EEF1FF;
+      zoom: 90%; /* Set the default zoom level */
+      overflow: hidden; /* Hide horizontal scrollbar */
+    }
+    .navbar {
+      background-color: #874CCC;  
+    }
+    .container {
+      margin-top: 5px;
+    }
+    .navbar-dark .navbar-nav .nav-link.active {
+      color: #ffffff; /* White color */
+    }
+    .nav-item .nav-link.btn-link img {
+    width: 40px; /* Adjust the size as needed */
+    height: 40px;
+    }
+  </style>
+  {% block extrastyles %}
+  {% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-sm navbar-dark">
+        <div class="container">
+          <a class="navbar-brand" href="#">DPPL Training Management</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+              <li class="nav-item {% if request.resolver_match.view_name == 'home' %}active{% endif %}">
+                <a class="nav-link" href="{% url 'home' %}">Calendar</a>
+              </li>
+              {% if user.is_checker %}
+                <li class="nav-item {% if request.resolver_match.view_name == 'checker_check_requests' %}active{% endif %}">
+                  <a class="nav-link" href="{% url 'checker_check_requests' %}">User Requests</a>
+                </li>
+              {% elif is_superior %}
+                <li class="nav-item {% if request.resolver_match.view_name == 'superior_check_requests' %}active{% endif %}">
+                  <a class="nav-link" href="{% url 'superior_check_requests' %}">Course Requests</a>
+                </li>
+              {% elif user.is_maker %}
+                <li class="nav-item {% if request.resolver_match.view_name == 'create_training' %}active{% endif %}">
+                  <a class="nav-link" href="{% url 'create_training' %}">Create Trainings</a>
+                </li>
+                <li class="nav-item {% if request.resolver_match.view_name == 'maker_check_requests' %}active{% endif %}">
+                  <a class="nav-link" href="{% url 'maker_check_requests' %}">Approved Requests</a>
+                </li>
+              {% else %}
+                <li class="nav-item {% if request.resolver_match.view_name == 'request_training' %}active{% endif %}">
+                  <a class="nav-link" href="{% url 'request_training' %}">Request Courses</a>
+                </li>
+              {% endif %}
+              <li class="nav-item">
+                <a class="nav-link" href="#" onclick="generateQR()">
+                  <i class="fas fa-qrcode"></i>
+                </a>
+              </li>              
+              <li class="nav-item {% if request.resolver_match.view_name == 'logout' %}active{% endif %}">
+                <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+  <div class="container mt-4">
+
+    <div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="qrModalLabel">QR Code</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+              <img id="qrCodeImg" src="" alt="QR Code">
+            </div>
+          </div>
+        </div>
+      </div>
+    {% block content %}
+    {% endblock %}
+  </div>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Function to generate QR code
+    function generateQR() {
+      var username = "{{ user.username }}"; // Get the username
+      var qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" + username; // Generate QR code URL
+      var qrCodeImg = document.getElementById('qrCodeImg'); // Get the QR code image element
+      qrCodeImg.src = qrCodeUrl; // Set image source to QR code URL
+      var modal = new bootstrap.Modal(document.getElementById('qrModal'), { backdrop: false }); // Initialize modal without backdrop
+      modal.show(); // Show modal
+    }
+  </script>
+  {% block extrascripts %}
+  {% endblock %}
+</body>
+</html>
