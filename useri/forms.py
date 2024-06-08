@@ -1,7 +1,7 @@
 from django import forms
 from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining
 from django.contrib.admin.widgets import FilteredSelectMultiple
-
+import logging
 class RequestTrainingForm(forms.ModelForm):
     class Meta:
         model = RequestTraining
@@ -31,8 +31,8 @@ class TrainingRequestApprovalForm(forms.Form):
     request_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)
     assignment_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)
     status_id = forms.IntegerField(widget=forms.HiddenInput())
-    hod_comment = forms.CharField(widget=forms.Textarea, label='HOD Comment', required=False)
-    checker_comment = forms.CharField(widget=forms.Textarea, label='Checker Comment', required=False)
+    hod_comment = forms.CharField(widget=forms.Textarea, label='Comment', required=False)
+    action = forms.ChoiceField(choices=[('approve', 'Approve'), ('reject', 'Reject')], widget=forms.HiddenInput())
 
     def clean(self):
         cleaned_data = super().clean()
@@ -40,18 +40,76 @@ class TrainingRequestApprovalForm(forms.Form):
         assignment_id = cleaned_data.get('assignment_id')
         status_id = cleaned_data.get('status_id')
         hod_comment = cleaned_data.get('hod_comment')
-        checker_comment = cleaned_data.get('checker_comment')
+        action = cleaned_data.get('action')
 
         if not request_id and not assignment_id:
             raise forms.ValidationError("Request ID or Assignment ID is required.")
         if not status_id:
             raise forms.ValidationError("Status ID is required.")
-        if not hod_comment and not checker_comment:
-            raise forms.ValidationError("HOD or Checker comment is required.")
+        if not hod_comment:
+            raise forms.ValidationError("Comment is required.")
+        if not action:
+            raise forms.ValidationError("Action is required.")
 
         return cleaned_data
 
+class SuperiorAssignmentForm(forms.ModelForm):
+    assigned_users = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        required=True,
+    )
 
+    class Meta:
+        model = SuperiorAssignedTraining
+        fields = ['assigned_users', 'training_programme', 'other_training', 'hod_comment']
+        widgets = {
+            'training_programme': forms.Select(attrs={'class': 'form-select'}),
+            'other_training': forms.TextInput(attrs={'class': 'form-control'}),
+            'hod_comment': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        superior_user = kwargs.pop('superior_user', None)
+        super().__init__(*args, **kwargs)
+        if superior_user:
+            self.superior_user = superior_user
+            self.fields['assigned_users'].queryset = CustomUser.objects.filter(
+                user_departments__in=superior_user.headed_departments.all()
+            ).distinct()
+            self.fields['assigned_users'].label_from_instance = self.label_from_instance
+        self.fields['training_programme'].queryset = TrainingProgramme.objects.all()
+        self.fields['training_programme'].required = False
+        self.fields['other_training'].required = False
+
+    def label_from_instance(self, obj):
+        return f"{obj.username} - {obj.employee_name}"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        training_programme = cleaned_data.get("training_programme")
+        other_training = cleaned_data.get("other_training")
+
+        if not training_programme and not other_training:
+            raise forms.ValidationError("You must select a training programme or specify another training.")
+        return cleaned_data
+
+    def get_hierarchical_departments(self):
+        def get_sub_departments(department):
+            hierarchy = [{'department': department, 'members': department.members.all()}]
+            sub_departments = department.sub_departments.all()
+            for sub_dept in sub_departments:
+                hierarchy.extend(get_sub_departments(sub_dept))
+            return hierarchy
+        
+        hierarchical_departments = []
+        for department in self.superior_user.headed_departments.all():
+            hierarchical_departments.extend(get_sub_departments(department))
+        
+        return hierarchical_departments
+    
+    
+    
 class CheckerApprovalForm(forms.Form):
     request_id = forms.IntegerField(widget=forms.HiddenInput())
     status_id = forms.IntegerField(widget=forms.HiddenInput())
@@ -72,43 +130,7 @@ class CheckerApprovalForm(forms.Form):
 
         return cleaned_data
 
-class SuperiorAssignmentForm(forms.ModelForm):
-    assigned_users = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.none(),
-        widget=forms.CheckboxSelectMultiple,
-        required=True,
-    )
 
-    class Meta:
-        model = SuperiorAssignedTraining
-        fields = ['assigned_users', 'training_programme', 'other_training', 'hod_comment']
-        widgets = {
-            'training_programme': forms.Select(attrs={'class': 'form-select', 'id': 'id_training_programme'}),
-            'other_training': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_other_training'}),
-            'hod_comment': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        superior_user = kwargs.pop('superior_user', None)
-        super().__init__(*args, **kwargs)
-        if superior_user:
-            self.fields['assigned_users'].queryset = CustomUser.objects.filter(user_departments__in=superior_user.headed_departments.all()).distinct()
-            self.fields['assigned_users'].label_from_instance = self.label_from_instance
-        self.fields['training_programme'].queryset = TrainingProgramme.objects.all()
-        self.fields['training_programme'].required = False
-
-    def label_from_instance(self, obj):
-        return f"{obj.username} - {obj.employee_name}"
-
-    def clean(self):
-        cleaned_data = super().clean()
-        training_programme = cleaned_data.get("training_programme")
-        other_training = cleaned_data.get("other_training")
-
-        if not training_programme and not other_training:
-            raise forms.ValidationError("You must select a training programme or specify another training.")
-        return cleaned_data
-    
 class TrainingCreationForm(forms.ModelForm):
     trainer_type = forms.ChoiceField(
         choices=(('Internal', 'Internal'), ('External', 'External')),

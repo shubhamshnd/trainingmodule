@@ -14,6 +14,7 @@ urlpatterns = [
     path('superior-check-requests/', views.superior_check_requests, name='superior_check_requests'),
     path('superior-approve-request/', views.superior_approve_request, name='superior_approve_request'),
     path('superior-reject-request/', views.superior_reject_request, name='superior_reject_request'),
+    path('assign-higher-superior/', views.assign_higher_superior, name='assign_higher_superior'),
     path('check_requests/', views.checker_check_requests, name='checker_check_requests'),
     path('approve_request/', views.checker_approve_request, name='checker_approve_request'),
     path('reject_request/', views.checker_reject_request, name='checker_reject_request'),

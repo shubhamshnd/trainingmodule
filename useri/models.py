@@ -146,19 +146,15 @@ class RequestTraining(models.Model):
     request_date = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
     final_approval_timestamp = models.DateTimeField(null=True, blank=True)  # Track the final approval
+    is_rejected = models.BooleanField(default=False)  # Add this field
+    is_approved = models.BooleanField(default=(False))  # Add this field
 
     def __str__(self):
         return f"Request by {self.custom_user.username} for {self.training_programme if self.training_programme else self.other_training}"
 
 
-class Approval(models.Model):
-    request_training = models.ForeignKey(RequestTraining, on_delete=models.CASCADE, related_name='approvals')
-    approver = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    comment = models.TextField(blank=True)
-    approval_timestamp = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"Approval by {self.approver.username} for request {self.request_training.id}"
+
 
 
 class HODTrainingAssignment(models.Model):
@@ -242,8 +238,34 @@ class SuperiorAssignedTraining(models.Model):
     assigned_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='superior_assigned_trainings')
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='superior_assigned_trainings')
     training_programme = models.ForeignKey(TrainingProgramme, on_delete=models.CASCADE, related_name='superior_assigned_trainings')
-    other_training = models.CharField(max_length=255, blank=True)  # Add this field if not already present
-    hod_comment = models.TextField(blank=True)  # Add this field if not already present
-
+    other_training = models.CharField(max_length=255, blank=True)
+    hod_comment = models.TextField(blank=True)
+    assigned_users = models.ManyToManyField(CustomUser, related_name='assigned_trainings')
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_rejected = models.BooleanField(default=False)  # Add this field
+    is_approved = models.BooleanField(default=False)  # Add this field
     def __str__(self):
         return f"{self.assigned_by} - {self.department}"
+
+    class Meta:
+        get_latest_by = 'created_at'
+
+    @property
+    def latest_approval(self):
+        return Approval.objects.filter(request_training__id=self.id).latest('approval_timestamp')
+    
+
+
+class Approval(models.Model):
+    request_training = models.ForeignKey(RequestTraining, on_delete=models.CASCADE, related_name='approvals', null=True, blank=True)
+    superior_assignment = models.ForeignKey(SuperiorAssignedTraining, on_delete=models.CASCADE, related_name='approvals', null=True, blank=True)
+    approver = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    comment = models.TextField(blank=True)
+    approval_timestamp = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=10, choices=[('approve', 'Approve'), ('reject', 'Reject')], default='approve')  # Default value
+
+    def __str__(self):
+        return f"Approval by {self.approver.username} for request {self.request_training.id if self.request_training else self.superior_assignment.id}"
+    
+    class Meta:
+        get_latest_by = 'approval_timestamp'
