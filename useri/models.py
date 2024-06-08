@@ -216,13 +216,18 @@ class TrainingSession(models.Model):
     deadline_to_complete = models.DateField(null=True, blank=True)
     selected_participants = models.ManyToManyField(CustomUser, related_name='selected_trainings', blank=True)
 
+    def mark_as_completed(self):
+        attendees = AttendanceMaster.objects.filter(training_session=self).values_list('custom_user', flat=True)
+        if attendees.exists():
+            self.selected_participants.set(attendees)
+            self.save()
+
     @property
     def is_completed(self):
         return AttendanceMaster.objects.filter(training_session=self, custom_user__in=self.selected_participants.all()).exists()
 
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"
-
 
 class AttendanceMaster(models.Model):
     custom_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)

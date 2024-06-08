@@ -635,7 +635,8 @@ def send_training_request(request, pk):
             selected_users = CustomUser.objects.filter(id__in=selected_users_ids)
             training.selected_participants.set(selected_users)
             training.save()
-            messages.success(request, "Training session details updated successfully.")
+            training.mark_as_completed()
+            messages.success(request, "Training session details and participants updated successfully.")
             return redirect('create_training')
         else:
             messages.error(request, "There was an error updating the training session. Please check the form for errors.")
@@ -667,6 +668,7 @@ def send_training_request(request, pk):
         'employees': employees,
         'attendances': list(attendances),
     })
+
 
 @login_required
 def edit_training(request, pk):
