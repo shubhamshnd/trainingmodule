@@ -1,7 +1,7 @@
 from django import template
 from useri.models import RequestTraining, SuperiorAssignedTraining
 register = template.Library()
-
+from django.utils.html import format_html
 @register.filter
 def is_instance(value, class_name):
     return value.__class__.__name__ == class_name
@@ -18,3 +18,6 @@ def is_approved_by(request, user):
     elif isinstance(request, SuperiorAssignedTraining):
         return request.assigned_by == user  # or any other condition to check approval for SuperiorAssignedTraining
     return False
+
+
+

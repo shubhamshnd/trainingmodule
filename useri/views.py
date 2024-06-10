@@ -185,7 +185,6 @@ def assign_superior(request):
 def superior_check_requests(request):
     user = request.user
 
-    # Get the departments the user heads
     headed_departments = Department.objects.filter(head=user)
     if not headed_departments.exists():
         messages.error(request, "You are not assigned as a head of any departments.")
@@ -203,12 +202,10 @@ def superior_check_requests(request):
     # Fetch the requests where the current approver is the user
     user_requests = RequestTraining.objects.filter(
         current_approver=user,
-        is_rejected=False,
     ).annotate(timestamp=F('request_date')).order_by('-timestamp')
 
     superior_assignments = SuperiorAssignedTraining.objects.filter(
         current_approver=user,
-        is_rejected=False,
     ).annotate(timestamp=F('created_at')).order_by('-timestamp')
 
     # Combine the requests for display
@@ -296,7 +293,7 @@ def superior_check_requests(request):
                         logger.info(f"Superior assignment {superior_assignment.id} approved by {request.user.username}. Next approver: {next_approver.username}, Department: {parent_dept_name}")
                     else:
                         superior_assignment.is_approved = True
-                        superior_assignment.final_approval_timestamp = approval_timestamp
+                        superior_assignment.final_approval_timestamp = approval_timestamp  # Set the final approval timestamp
                         superior_assignment.current_approver = None
                         logger.info(f"Superior assignment {superior_assignment.id} fully approved by {request.user.username}. No further approvers.")
                     superior_assignment.save()
@@ -322,10 +319,18 @@ def superior_check_requests(request):
                 training_programme=training_programme,
                 other_training=other_training,
                 hod_comment=hod_comment,
-                current_approver=user
             )
             superior_assignment.save()
             superior_assignment.assigned_users.set(assigned_users)
+
+            # Set current approver to the immediate superior of the assigner
+            next_approver, parent_dept_name = find_next_approver(user)
+            if next_approver:
+                superior_assignment.current_approver = next_approver
+                logger.info(f"Superior assignment {superior_assignment.id} assigned by {user.username}. Next approver: {next_approver.username}, Department: {parent_dept_name}")
+            else:
+                logger.info(f"Superior assignment {superior_assignment.id} assigned by {user.username}. No further approvers.")
+            superior_assignment.save()
 
             for assigned_user in assigned_users:
                 Approval.objects.create(
@@ -406,39 +411,77 @@ def log_department_hierarchy(department, level=0):
         logger.info(f"{indent}Sub-departments of {department.name}:")
         for sub_department in sub_departments:
             log_department_hierarchy(sub_department, level + 1)
-
+            
+            
 @login_required
 def superior_approve_request(request):
     if request.method == 'POST':
         request_id = request.POST.get('request_id')
         hod_comment = request.POST.get('hod_comment')
+        action = request.POST.get('action')
 
-        training_request = get_object_or_404(RequestTraining, id=request_id)
-        training_request.hod_comment = hod_comment
+        # Determine the type of request (RequestTraining or SuperiorAssignedTraining)
+        if action == 'approve':
+            try:
+                training_request = RequestTraining.objects.get(id=request_id)
+                training_request.hod_comment = hod_comment
 
-        approval_timestamp = timezone.now()
+                approval_timestamp = timezone.now()
 
-        next_approver, parent_dept_name = find_next_approver(training_request.current_approver)
+                next_approver, parent_dept_name = find_next_approver(training_request.current_approver)
 
-        Approval.objects.create(
-            request_training=training_request,
-            approver=request.user,
-            comment=hod_comment,
-            approval_timestamp=approval_timestamp,
-            action='approve'
-        )
+                Approval.objects.create(
+                    request_training=training_request,
+                    approver=request.user,
+                    comment=hod_comment,
+                    approval_timestamp=approval_timestamp,
+                    action='approve'
+                )
 
-        if next_approver:
-            training_request.current_approver = next_approver
-            logger.info(f"Training request {training_request.id} approved by {request.user.username}. Next approver: {next_approver.username}, Department: {parent_dept_name}")
-        else:
-            training_request.is_approved = True
-            training_request.final_approval_timestamp = approval_timestamp
-            training_request.current_approver = None
-            logger.info(f"Training request {training_request.id} fully approved by {request.user.username}. No further approvers.")
+                if next_approver:
+                    training_request.current_approver = next_approver
+                    logger.info(f"Training request {training_request.id} approved by {request.user.username}. Next approver: {next_approver.username}, Department: {parent_dept_name}")
+                else:
+                    training_request.is_approved = True
+                    training_request.final_approval_timestamp = approval_timestamp
+                    training_request.current_approver = None
+                    logger.info(f"Training request {training_request.id} fully approved by {request.user.username}. No further approvers.")
 
-        training_request.save()
-        messages.success(request, f"Training request #{request_id} has been approved successfully.")
+                training_request.save()
+                messages.success(request, f"Training request #{request_id} has been approved successfully.")
+            except RequestTraining.DoesNotExist:
+                try:
+                    superior_assignment = SuperiorAssignedTraining.objects.get(id=request_id)
+                    superior_assignment.hod_comment = hod_comment
+
+                    approval_timestamp = timezone.now()
+
+                    next_approver, parent_dept_name = find_next_approver(superior_assignment.current_approver)
+
+                    Approval.objects.create(
+                        superior_assignment=superior_assignment,
+                        approver=request.user,
+                        comment=hod_comment,
+                        approval_timestamp=approval_timestamp,
+                        action='approve'
+                    )
+
+                    if next_approver:
+                        superior_assignment.current_approver = next_approver
+                        logger.info(f"Superior assignment {superior_assignment.id} approved by {request.user.username}. Next approver: {next_approver.username}, Department: {parent_dept_name}")
+                    else:
+                        superior_assignment.is_approved = True
+                        superior_assignment.final_approval_timestamp = approval_timestamp  # Set the final approval timestamp
+                        superior_assignment.current_approver = None
+                        logger.info(f"Superior assignment {superior_assignment.id} fully approved by {request.user.username}. No further approvers.")
+
+                    superior_assignment.save()
+                    messages.success(request, f"Superior assignment #{request_id} has been approved successfully.")
+                except SuperiorAssignedTraining.DoesNotExist:
+                    messages.error(request, "No matching training request found.")
+                    logger.error(f"No matching training request found for ID {request_id}.")
+                    return redirect('superior_check_requests')
+
         return redirect('superior_check_requests')
 
     return redirect('superior_check_requests')
@@ -448,27 +491,58 @@ def superior_reject_request(request):
     if request.method == 'POST':
         request_id = request.POST.get('request_id')
         hod_comment = request.POST.get('hod_comment')
+        action = request.POST.get('action')
 
-        training_request = get_object_or_404(RequestTraining, id=request_id)
-        training_request.hod_comment = hod_comment
-        training_request.is_rejected = True
-        training_request.is_approved = False
-        training_request.final_approval_timestamp = timezone.now()
-        training_request.current_approver = None
+        # Determine the type of request (RequestTraining or SuperiorAssignedTraining)
+        if action == 'reject':
+            try:
+                training_request = RequestTraining.objects.get(id=request_id)
+                training_request.hod_comment = hod_comment
+                training_request.is_rejected = True
+                training_request.is_approved = False
+                training_request.final_approval_timestamp = timezone.now()
+                training_request.current_approver = None
 
-        training_request.save()
+                training_request.save()
 
-        # Log the rejection
-        Approval.objects.create(
-            request_training=training_request,
-            approver=request.user,
-            comment=hod_comment,
-            approval_timestamp=timezone.now(),
-            action='reject'
-        )
+                # Log the rejection
+                Approval.objects.create(
+                    request_training=training_request,
+                    approver=request.user,
+                    comment=hod_comment,
+                    approval_timestamp=timezone.now(),
+                    action='reject'
+                )
 
-        logger.info(f"Training request {training_request.id} rejected by {request.user.username}.")
-        messages.success(request, f"Training request #{request_id} has been rejected successfully.")
+                logger.info(f"Training request {training_request.id} rejected by {request.user.username}.")
+                messages.success(request, f"Training request #{request_id} has been rejected successfully.")
+            except RequestTraining.DoesNotExist:
+                try:
+                    superior_assignment = SuperiorAssignedTraining.objects.get(id=request_id)
+                    superior_assignment.hod_comment = hod_comment
+                    superior_assignment.is_rejected = True
+                    superior_assignment.is_approved = False
+                    superior_assignment.final_approval_timestamp = timezone.now()  # Set the final approval timestamp
+                    superior_assignment.current_approver = None
+
+                    superior_assignment.save()
+
+                    # Log the rejection
+                    Approval.objects.create(
+                        superior_assignment=superior_assignment,
+                        approver=request.user,
+                        comment=hod_comment,
+                        approval_timestamp=timezone.now(),
+                        action='reject'
+                    )
+
+                    logger.info(f"Superior assignment {superior_assignment.id} rejected by {request.user.username}.")
+                    messages.success(request, f"Superior assignment #{request_id} has been rejected successfully.")
+                except SuperiorAssignedTraining.DoesNotExist:
+                    messages.error(request, "No matching training request found.")
+                    logger.error(f"No matching training request found for ID {request_id}.")
+                    return redirect('superior_check_requests')
+
         return redirect('superior_check_requests')
 
     return redirect('superior_check_requests')

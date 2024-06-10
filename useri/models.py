@@ -241,6 +241,7 @@ class SuperiorAssignedTraining(models.Model):
     is_rejected = models.BooleanField(default=False)  # Add this field
     is_approved = models.BooleanField(default=False)  # Add this field
     current_approver = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='current_superior_assignments')
+    final_approval_timestamp = models.DateTimeField(null=True, blank=True)  # Add this field
     def __str__(self):
         return f"{self.assigned_by} - {self.department}"
 

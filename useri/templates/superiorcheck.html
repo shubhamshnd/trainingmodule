@@ -77,6 +77,7 @@
                             <th scope="col">Training Programme</th>
                             <th scope="col">Request Date</th>
                             <th scope="col">Action</th>
+                            <th scope="col">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -101,20 +102,27 @@
                             <td>{{ request.timestamp }}</td>
                             <td>
                                 {% if not request.is_approved and not request.is_rejected %}
-                                    <button type="button" class="btn btn-success mt-2 me-2" data-bs-toggle="modal" data-bs-target="#approveModal" data-request-id="{{ request.id }}">
-                                        Approve
-                                    </button>
-                                    <button type="button" class="btn btn-danger mt-2" data-bs-toggle="modal" data-bs-target="#rejectModal" data-request-id="{{ request.id }}">
-                                        Reject
-                                    </button>
-                                {% else %}
-                                    <p>{{ request.approvals.latest.action }} on {{ request.approvals.latest.approval_timestamp }}</p>
+                                    {% if request.assigned_by != user %}
+                                        <button type="button" class="btn btn-success mt-2 me-2" data-bs-toggle="modal" data-bs-target="#approveModal" data-request-id="{{ request.id }}">
+                                            Approve
+                                        </button>
+                                        <button type="button" class="btn btn-danger mt-2" data-bs-toggle="modal" data-bs-target="#rejectModal" data-request-id="{{ request.id }}">
+                                            Reject
+                                        </button>
+                                    {% endif %}
                                 {% endif %}
+                            </td>
+                            <td>
+                                {% for approval in request.approvals.all %}
+                                    <div class="alert {% if approval.action == 'approve' %}alert-success{% else %}alert-danger{% endif %} mt-1 mb-1" role="alert">
+                                        {{ approval.action|capfirst }} by {{ approval.approver.employee_name }} on {{ approval.approval_timestamp }}
+                                    </div>
+                                {% endfor %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4">No training requests found.</td>
+                            <td colspan="5">No training requests found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
