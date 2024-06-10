@@ -65,7 +65,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                 'useri.context_processors.user_context', 
+                'useri.context_processors.user_context', 
             ],
         },
     },
@@ -93,7 +93,7 @@ AUTHENTICATION_BACKENDS = [
     'useri.backends.CustomUserBackend',         # Custom backend
 ]
 
-
+AUTH_USER_MODEL = 'useri.CustomUser'
 
 
 # Password validation

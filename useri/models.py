@@ -1,8 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
-
-
+import logging
+logger = logging.getLogger(__name__)
 class Role(models.Model):
     ROLE_CHOICES = (
         ('User', 'User'),
@@ -106,7 +106,6 @@ class Department(models.Model):
     def __str__(self):
         return self.name
 
-
 class TrainingProgramme(models.Model):
     title = models.CharField(max_length=255)
     validity = models.IntegerField(default=2)  # Validity in years
@@ -148,12 +147,9 @@ class RequestTraining(models.Model):
     final_approval_timestamp = models.DateTimeField(null=True, blank=True)  # Track the final approval
     is_rejected = models.BooleanField(default=False)  # Add this field
     is_approved = models.BooleanField(default=(False))  # Add this field
-
+    current_approver = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='current_requests')
     def __str__(self):
         return f"Request by {self.custom_user.username} for {self.training_programme if self.training_programme else self.other_training}"
-
-
-
 
 
 
@@ -244,6 +240,7 @@ class SuperiorAssignedTraining(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_rejected = models.BooleanField(default=False)  # Add this field
     is_approved = models.BooleanField(default=False)  # Add this field
+    current_approver = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='current_superior_assignments')
     def __str__(self):
         return f"{self.assigned_by} - {self.department}"
 
@@ -262,7 +259,7 @@ class Approval(models.Model):
     approver = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     comment = models.TextField(blank=True)
     approval_timestamp = models.DateTimeField(auto_now_add=True)
-    action = models.CharField(max_length=10, choices=[('approve', 'Approve'), ('reject', 'Reject')], default='approve')  # Default value
+    action = models.CharField(max_length=10, choices=[('approve', 'Approve'), ('reject', 'Reject'), ('pending', 'Pending')], default='pending')
 
     def __str__(self):
         return f"Approval by {self.approver.username} for request {self.request_training.id if self.request_training else self.superior_assignment.id}"

@@ -33,7 +33,7 @@
                 {% csrf_token %}
                 <div class="mb-3">
                     <label for="assigned_users" class="form-label">Select Users</label>
-                    <div style="height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
+                    <div style="height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
                         <ul class="list-unstyled">
                             {% for department in assignment_form.get_hierarchical_departments %}
                                 <li>
@@ -100,7 +100,7 @@
                             </td>
                             <td>{{ request.timestamp }}</td>
                             <td>
-                                {% if request.approvals.latest.approver == user and request.approvals.latest.action == 'pending' %}
+                                {% if not request.is_approved and not request.is_rejected %}
                                     <button type="button" class="btn btn-success mt-2 me-2" data-bs-toggle="modal" data-bs-target="#approveModal" data-request-id="{{ request.id }}">
                                         Approve
                                     </button>
@@ -171,7 +171,6 @@
         </div>
     </div>
 
-    <!-- Modal for selecting higher-level superior -->
     {% if select_higher_superior %}
     <div class="modal fade" id="higherSuperiorModal" tabindex="-1" aria-labelledby="higherSuperiorModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -220,9 +219,8 @@
         }
 
         trainingProgrammeSelect.addEventListener('change', toggleOtherTraining);
-        toggleOtherTraining(); // Initial check
+        toggleOtherTraining();
 
-        // Handle approve button click
         var approveModal = document.getElementById('approveModal');
         approveModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
@@ -234,7 +232,6 @@
             modalBodyInput.value = requestId;
         });
 
-        // Handle reject button click
         var rejectModal = document.getElementById('rejectModal');
         rejectModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
