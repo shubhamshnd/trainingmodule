@@ -11,6 +11,7 @@ urlpatterns = [
     path('home/', views.home, name='home'),
     path('logout/', views.logout_view, name='logout'),
     path('request-training/', views.request_training, name='request_training'),
+    path('assign-superior/', views.assign_superior, name='assign_superior'),
     path('superior-check-requests/', views.superior_check_requests, name='superior_check_requests'),
     path('superior-approve-request/', views.superior_approve_request, name='superior_approve_request'),
     path('superior-reject-request/', views.superior_reject_request, name='superior_reject_request'),

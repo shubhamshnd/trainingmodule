@@ -20,7 +20,7 @@
 <div class="container1">
     <div class="row">
         <div class="col-md-3">
-            <form method="post">
+            <form method="post" action="{% url 'assign_superior' %}">
                 {% csrf_token %}
                 <div class="mb-3">
                     <label for="training_programme" class="form-label">Select Training Programme</label>
@@ -55,13 +55,9 @@
                 <table class="table table-primary table-striped">
                     <thead>
                         <tr>
-                            <th scope="col">Training Programme</th>
-                            <th scope="col">Other Training</th>
-                            <th scope="col">Status</th>
+                            <th scope="col">Training Programme / Other Training</th>
                             <th scope="col">Request Date</th>
-                            <th scope="col">User Comment</th>
-                            <th scope="col">HOD Comment</th>
-                            <th scope="col">Checker Comment</th>
+                            <th scope="col">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -71,19 +67,15 @@
                                 {% if request.training_programme %}
                                     {{ request.training_programme.title }}
                                 {% else %}
-                                    N/A
+                                    {{ request.other_training }}
                                 {% endif %}
                             </td>
-                            <td>{{ request.other_training }}</td>
-                            <td>{{ request.status.name }}</td>
                             <td>{{ request.request_date }}</td>
-                            <td>{{ request.user_comment }}</td>
-                            <td>{{ request.hod_comment }}</td>
-                            <td>{{ request.checker_comment }}</td>
+                            <td>{{ request.status.name }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7">No training requests found.</td>
+                            <td colspan="3">No training requests found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -92,4 +84,23 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const trainingProgrammeField = document.getElementById('id_training_programme');
+        const otherTrainingField = document.getElementById('id_other_training');
+
+        function toggleOtherTrainingField() {
+            if (trainingProgrammeField.value) {
+                otherTrainingField.disabled = true;
+                otherTrainingField.value = '';
+            } else {
+                otherTrainingField.disabled = false;
+            }
+        }
+
+        trainingProgrammeField.addEventListener('change', toggleOtherTrainingField);
+        toggleOtherTrainingField();
+    });
+</script>
 {% endblock %}
