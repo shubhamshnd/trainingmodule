@@ -93,7 +93,7 @@ AUTHENTICATION_BACKENDS = [
     'useri.backends.CustomUserBackend',         # Custom backend
 ]
 
-AUTH_USER_MODEL = 'useri.CustomUser'
+
 
 
 # Password validation
