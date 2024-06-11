@@ -1,0 +1,23 @@
+{% extends "admin/change_form.html" %}
+{% load i18n static custom_filters %}
+
+{% block after_related_objects %}
+    <div class="form-row">
+        <div>
+            <label for="id_head_role">{{ form.head_role.label }}</label>
+            {{ form.head_role }}
+        </div>
+    </div>
+
+    <h3>Selected Members Roles</h3>
+    {% for member in form.instance.members.all %}
+        <div class="form-row">
+            <div>
+                {% with field_name="member_"|add:member.pk|stringformat:"s"|add:"_role" %}
+                    <label for="id_{{ field_name }}">Role for {{ member.employee_name }}</label>
+                    {{ form|get_field:field_name }}
+                {% endwith %}
+            </div>
+        </div>
+    {% endfor %}
+{% endblock %}

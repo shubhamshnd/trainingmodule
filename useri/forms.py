@@ -274,31 +274,23 @@ class TrainingRequestForm(forms.ModelForm):
             'deadline_to_complete': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
         }
         
-        
 class DepartmentAdminForm(forms.ModelForm):
+    HEAD_ROLE_CHOICES = [
+        ('', 'None'),
+        ('maker', 'Head is Maker'),
+        ('checker', 'Head is Checker'),
+    ]
+
+    head_role = forms.ChoiceField(
+        choices=HEAD_ROLE_CHOICES,
+        widget=forms.RadioSelect,
+        label="Head Role",
+        required=False
+    )
+
     class Meta:
         model = Department
         fields = '__all__'
-
-    head = forms.ModelChoiceField(
-        queryset=CustomUser.objects.all().order_by('employee_name'),
-        widget=forms.Select,
-        label="Head",
-    )
-
-    members = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.filter(work_order_no='').order_by('employee_name'),
-        widget=FilteredSelectMultiple("Members", is_stacked=False),
-        label="Members",
-        required=False,
-    )
-
-    associates = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.exclude(work_order_no='').order_by('employee_name'),
-        widget=FilteredSelectMultiple("Associates", is_stacked=False),
-        label="Associates",
-        required=False,
-    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -306,22 +298,57 @@ class DepartmentAdminForm(forms.ModelForm):
         self.fields['members'].queryset = CustomUser.objects.filter(work_order_no='').order_by('employee_name')
         self.fields['associates'].queryset = CustomUser.objects.exclude(work_order_no='').order_by('employee_name')
 
-    def clean_head(self):
-        head = self.cleaned_data.get('head')
-        if head and not head.is_active:
-            raise forms.ValidationError("Selected head is not an active user.")
-        return head
+        # Initialize head_role based on the current head's is_maker and is_checker values
+        if self.instance and self.instance.head:
+            if self.instance.head.is_maker:
+                self.fields['head_role'].initial = 'maker'
+            elif self.instance.head.is_checker:
+                self.fields['head_role'].initial = 'checker'
+            else:
+                self.fields['head_role'].initial = ''
 
-    def clean_members(self):
-        members = self.cleaned_data.get('members')
-        inactive_members = members.filter(is_active=False)
-        if inactive_members.exists():
-            raise forms.ValidationError("One or more selected members are not active users.")
-        return members
+        # Dynamically add member role fields
+        if self.instance:
+            for member in self.instance.members.all():
+                role_field_name = f'member_{member.pk}_role'
+                self.fields[role_field_name] = forms.ChoiceField(
+                    choices=self.HEAD_ROLE_CHOICES,
+                    widget=forms.RadioSelect,
+                    label=f"Role for {member.employee_name}",
+                    required=False
+                )
+                if member.is_maker:
+                    self.fields[role_field_name].initial = 'maker'
+                elif member.is_checker:
+                    self.fields[role_field_name].initial = 'checker'
+                else:
+                    self.fields[role_field_name].initial = ''
 
-    def clean_associates(self):
-        associates = self.cleaned_data.get('associates')
-        inactive_associates = associates.filter(is_active=False)
-        if inactive_associates.exists():
-            raise forms.ValidationError("One or more selected associates are not active users.")
-        return associates
+        # Add counts to the form instance for the template
+        self.associate_count = self.instance.associates.count()
+        self.member_count = self.instance.members.count()
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+
+        # Save head_role
+        if instance.head:
+            head_role = self.cleaned_data['head_role']
+            instance.head.is_maker = (head_role == 'maker')
+            instance.head.is_checker = (head_role == 'checker')
+            instance.head.save()
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+
+        # Save roles for each member
+        if instance:
+            for member in instance.members.all():
+                role_field_name = f'member_{member.pk}_role'
+                member_role = self.cleaned_data.get(role_field_name, '')
+                member.is_maker = (member_role == 'maker')
+                member.is_checker = (member_role == 'checker')
+                member.save()
+
+        return instance

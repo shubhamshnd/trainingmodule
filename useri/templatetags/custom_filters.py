@@ -20,4 +20,6 @@ def is_approved_by(request, user):
     return False
 
 
-
+@register.filter
+def get_field(form, field_name):
+    return form[field_name]

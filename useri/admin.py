@@ -74,20 +74,40 @@ class DepartmentAdmin(admin.ModelAdmin):
     search_fields = ['name', 'head__username']
     ordering = ['name']
     list_filter = ['parent', 'head']
-    filter_horizontal = ('members', 'associates')  # Added 'associates' here
+    filter_horizontal = ('members', 'associates')
+
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'parent')
+        }),
+        ('Head', {
+            'fields': ('head', 'head_role')
+        }),
+        ('Members', {
+            'fields': ('members', 'associates')
+        }),
+    )
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
         form.base_fields['head'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"
         form.base_fields['members'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"
-        form.base_fields['associates'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"  # Added label for associates
+        form.base_fields['associates'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"
         return form
 
-    class Media:
-        css = {
-            'all': ('admin/css/widgets.css',),  # This is to style the widget properly
-        }
-        js = ('admin/js/vendor/jquery/jquery.js', 'admin/js/vendor/select2/select2.full.js', 'admin/js/core.js')
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        # Save is_maker and is_checker for each member
+        if form.instance:
+            for member in form.instance.members.all():
+                role_field_name = f'member_{member.pk}_role'
+                member_role = form.cleaned_data.get(role_field_name, '')
+                member.is_maker = (member_role == 'maker')
+                member.is_checker = (member_role == 'checker')
+                member.save()
 
 
 admin.site.register(CustomUser, CustomUserAdmin)
