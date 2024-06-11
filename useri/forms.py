@@ -287,16 +287,24 @@ class DepartmentAdminForm(forms.ModelForm):
     )
 
     members = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.all().order_by('employee_name'),
+        queryset=CustomUser.objects.filter(work_order_no='').order_by('employee_name'),
         widget=FilteredSelectMultiple("Members", is_stacked=False),
         label="Members",
-        required=False,  # Make the members field optional
+        required=False,
+    )
+
+    associates = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.exclude(work_order_no='').order_by('employee_name'),
+        widget=FilteredSelectMultiple("Associates", is_stacked=False),
+        label="Associates",
+        required=False,
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['head'].queryset = CustomUser.objects.all().order_by('employee_name')
-        self.fields['members'].queryset = CustomUser.objects.all().order_by('employee_name')
+        self.fields['members'].queryset = CustomUser.objects.filter(work_order_no='').order_by('employee_name')
+        self.fields['associates'].queryset = CustomUser.objects.exclude(work_order_no='').order_by('employee_name')
 
     def clean_head(self):
         head = self.cleaned_data.get('head')
@@ -310,3 +318,10 @@ class DepartmentAdminForm(forms.ModelForm):
         if inactive_members.exists():
             raise forms.ValidationError("One or more selected members are not active users.")
         return members
+
+    def clean_associates(self):
+        associates = self.cleaned_data.get('associates')
+        inactive_associates = associates.filter(is_active=False)
+        if inactive_associates.exists():
+            raise forms.ValidationError("One or more selected associates are not active users.")
+        return associates

@@ -30,8 +30,8 @@ class TrainingProgrammeAdmin(admin.ModelAdmin):
     list_display = ['title', 'validity']
     search_fields = ['title']
     ordering = ['title']
-    fields = ['title', 'validity']  # Include validity in the admin form
-    list_filter = ['validity']  # Optionally, you can add a filter for validity
+    fields = ['title', 'validity']
+    list_filter = ['validity']
 
 
 class RequestTrainingAdmin(admin.ModelAdmin):
@@ -74,12 +74,13 @@ class DepartmentAdmin(admin.ModelAdmin):
     search_fields = ['name', 'head__username']
     ordering = ['name']
     list_filter = ['parent', 'head']
-    filter_horizontal = ('members',)
+    filter_horizontal = ('members', 'associates')  # Added 'associates' here
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
         form.base_fields['head'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"
         form.base_fields['members'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"
+        form.base_fields['associates'].label_from_instance = lambda obj: f"{obj.employee_name} - {obj.username}"  # Added label for associates
         return form
 
     class Media:
@@ -97,8 +98,3 @@ admin.site.register(TrainerMaster, TrainerMasterAdmin)
 admin.site.register(TrainingSession, TrainingSessionAdmin)
 admin.site.register(AttendanceMaster, AttendanceMasterAdmin)
 admin.site.register(Department, DepartmentAdmin)
-
-# Remove Role, Status, and HODTrainingAssignment from admin interface
-# admin.site.unregister(Role)
-# admin.site.unregister(Status)
-# admin.site.unregister(HODTrainingAssignment)  

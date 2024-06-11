@@ -138,7 +138,7 @@ class Department(models.Model):
     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='sub_departments')
     head = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='headed_departments')
     members = models.ManyToManyField(CustomUser, related_name='user_departments', blank=True)
-
+    associates = models.ManyToManyField(CustomUser, related_name='associated_departments', blank=True)
     def __str__(self):
         return self.name
 
