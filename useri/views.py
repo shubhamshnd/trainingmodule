@@ -89,21 +89,20 @@ def request_training(request):
     else:
         logger.info(f"User {user.username} is not associated with any departments.")
 
+    # Calculate the new training request ID globally within this view
+    latest_training_request = RequestTraining.objects.order_by('-id').first()
+    new_id = latest_training_request.id + 1 if latest_training_request else 1
+    logger.info(f"New training request ID: {new_id}")
+
     if request.method == 'POST':
         form = RequestTrainingForm(request.POST)
         if form.is_valid():
-            # Find the current max id and increment by 1 for the new request
-
-            latest_training_request = RequestTraining.objects.order_by('-id').first()
-                    
-            new_id = latest_training_request.id + 1 if latest_training_request else 1
-            logger.info(f"Latest training request ID: {latest_training_request.id if latest_training_request else 'None'}")
-                    # Log the ID of the new training request
-            logger.info(f"New training request ID: {new_id}")
             training_request = form.save(commit=False)
-            training_request.id = new_id
+            training_request.id = new_id  # Use the globally calculated new ID
             training_request.custom_user = user
             training_request.save()
+
+            request.session['training_request_id'] = training_request.id  # Store the ID in session
 
             superiors = CustomUser.objects.filter(
                 Q(headed_departments__in=member_departments) |
@@ -134,7 +133,7 @@ def request_training(request):
                     'user_requests': RequestTraining.objects.filter(custom_user=user).order_by('-request_date'),
                     'superiors': superiors,
                     'select_superior': True,
-                    'training_request_id': training_request.id
+                    'training_request_id': training_request.id  # Pass the training request ID to the template
                 })
             else:
                 messages.error(request, "No superior found for your departments.")
@@ -154,7 +153,6 @@ def request_training(request):
             Q(headed_departments__in=member_departments.values_list('sub_departments', flat=True))
         ).distinct()
 
-        logger.info(f"Training request ID (GET request): None")
         return render(request, 'request_training.html', {
             'form': form,
             'user_requests': RequestTraining.objects.filter(custom_user=user).order_by('-request_date'),
@@ -167,7 +165,7 @@ def request_training(request):
 def assign_superior(request):
     if request.method == 'POST':
         superior_id = request.POST.get('superior_id')
-        training_request_id = request.POST.get('training_request_id')  # Get the hidden field value
+        training_request_id = request.session.get('training_request_id')  # Retrieve the ID from session
 
         logger.info(f"POST data: {request.POST}")
         logger.info(f"Training request ID on form submission: {training_request_id}")
