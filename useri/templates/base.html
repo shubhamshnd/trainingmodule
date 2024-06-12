@@ -26,72 +26,74 @@
       color: #ffffff; /* White color */
     }
     .nav-item .nav-link.btn-link img {
-    width: 40px; /* Adjust the size as needed */
-    height: 40px;
+      width: 40px; /* Adjust the size as needed */
+      height: 40px;
     }
   </style>
   {% block extrastyles %}
   {% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-sm navbar-dark">
-        <div class="container">
-          <a class="navbar-brand" href="#">DPPL Training Management</a>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-          </button>
-          <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
-              <li class="nav-item {% if request.resolver_match.view_name == 'home' %}active{% endif %}">
-                <a class="nav-link" href="{% url 'home' %}">Calendar</a>
-              </li>
-              {% if user.is_checker %}
-                <li class="nav-item {% if request.resolver_match.view_name == 'checker_check_requests' %}active{% endif %}">
-                  <a class="nav-link" href="{% url 'checker_check_requests' %}">User Requests</a>
-                </li>
-              {% elif is_superior %}
-                <li class="nav-item {% if request.resolver_match.view_name == 'superior_check_requests' %}active{% endif %}">
-                  <a class="nav-link" href="{% url 'superior_check_requests' %}">Course Requests</a>
-                </li>
-              {% elif user.is_maker %}
-                <li class="nav-item {% if request.resolver_match.view_name == 'create_training' %}active{% endif %}">
-                  <a class="nav-link" href="{% url 'create_training' %}">Create Trainings</a>
-                </li>
-                <li class="nav-item {% if request.resolver_match.view_name == 'maker_check_requests' %}active{% endif %}">
-                  <a class="nav-link" href="{% url 'maker_check_requests' %}">Approved Requests</a>
-                </li>
-              {% else %}
-                <li class="nav-item {% if request.resolver_match.view_name == 'request_training' %}active{% endif %}">
-                  <a class="nav-link" href="{% url 'request_training' %}">Request Courses</a>
-                </li>
-              {% endif %}
-              <li class="nav-item">
-                <a class="nav-link" href="#" onclick="generateQR()">
-                  <i class="fas fa-qrcode"></i>
-                </a>
-              </li>              
-              <li class="nav-item {% if request.resolver_match.view_name == 'logout' %}active{% endif %}">
-                <a class="nav-link" href="{% url 'logout' %}">Logout</a>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </nav>
+  <nav class="navbar navbar-expand-sm navbar-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#">DPPL Training Management</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item {% if request.resolver_match.view_name == 'home' %}active{% endif %}">
+            <a class="nav-link" href="{% url 'home' %}">Calendar</a>
+          </li>
+          {% if user.is_checker %}
+            <li class="nav-item {% if request.resolver_match.view_name == 'checker_check_requests' %}active{% endif %}">
+              <a class="nav-link" href="{% url 'checker_check_requests' %}">User Requests</a>
+            </li>
+          {% endif %}
+          {% if is_superior %}
+            <li class="nav-item {% if request.resolver_match.view_name == 'superior_check_requests' %}active{% endif %}">
+              <a class="nav-link" href="{% url 'superior_check_requests' %}">Course Requests</a>
+            </li>
+          {% endif %}
+          {% if user.is_maker %}
+            <li class="nav-item {% if request.resolver_match.view_name == 'create_training' %}active{% endif %}">
+              <a class="nav-link" href="{% url 'create_training' %}">Create Trainings</a>
+            </li>
+            <li class="nav-item {% if request.resolver_match.view_name == 'maker_check_requests' %}active{% endif %}">
+              <a class="nav-link" href="{% url 'maker_check_requests' %}">Approved Requests</a>
+            </li>
+          {% endif %}
+          {% if not user.is_checker and not is_superior and not user.is_maker %}
+            <li class="nav-item {% if request.resolver_match.view_name == 'request_training' %}active{% endif %}">
+              <a class="nav-link" href="{% url 'request_training' %}">Request Courses</a>
+            </li>
+          {% endif %}
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="generateQR()">
+              <i class="fas fa-qrcode"></i>
+            </a>
+          </li>              
+          <li class="nav-item {% if request.resolver_match.view_name == 'logout' %}active{% endif %}">
+            <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
   <div class="container mt-4">
-
     <div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-scrollable">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title" id="qrModalLabel">QR Code</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body text-center">
-              <img id="qrCodeImg" src="" alt="QR Code">
-            </div>
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="qrModalLabel">QR Code</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <img id="qrCodeImg" src="" alt="QR Code">
           </div>
         </div>
       </div>
+    </div>
     {% block content %}
     {% endblock %}
   </div>

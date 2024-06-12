@@ -20,7 +20,7 @@
 <div class="container1">
     <div class="row">
         <div class="col-md-3">
-            <form method="post" action="{% url 'assign_superior' %}">
+            <form method="post" action="{% if select_superior %}{% url 'assign_superior' %}{% else %}{% url 'request_training' %}{% endif %}">
                 {% csrf_token %}
                 <div class="mb-3">
                     <label for="training_programme" class="form-label">Select Training Programme</label>
@@ -35,11 +35,12 @@
                     {{ form.user_comment }}
                 </div>
                 {% if select_superior %}
+                    <input type="hidden" name="training_request_id" value="{{ training_request_id }}">
                     <div class="mb-3">
                         <label for="superior" class="form-label">Select Superior</label>
                         <select class="form-select" name="superior_id" required>
                             {% for superior in superiors %}
-                                <option value="{{ superior.id }}">{{ superior.employee_name }}</option>
+                                <option value="{{ superior.id }}">{{ superior.employee_name }} - {{ superior.username }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -84,6 +85,7 @@
         </div>
     </div>
 </div>
+
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {

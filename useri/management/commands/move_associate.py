@@ -14,7 +14,7 @@ DEPARTMENT_VARIANCE = {
     'MECHANICAL' : 'MECHANICAL',
     'OPERATIONS' : 'OPERATIONS',
     'SECURITY' : 'SECURITY',
-    # Add more mappings as required
+   
 }
 
 class Command(BaseCommand):

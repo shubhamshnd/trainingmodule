@@ -181,9 +181,10 @@ class RequestTraining(models.Model):
     request_date = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
     final_approval_timestamp = models.DateTimeField(null=True, blank=True)  # Track the final approval
-    is_rejected = models.BooleanField(default=False)  # Add this field
-    is_approved = models.BooleanField(default=(False))  # Add this field
+    is_rejected = models.BooleanField(default=False)
+    is_approved = models.BooleanField(default=False)
     current_approver = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='current_requests')
+    
     def __str__(self):
         return f"Request by {self.custom_user.username} for {self.training_programme if self.training_programme else self.other_training}"
 

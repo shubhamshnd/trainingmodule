@@ -5,10 +5,15 @@ from .models import (
     CustomUser, TrainingProgramme, RequestTraining, 
     VenueMaster, TrainerMaster, TrainingSession, AttendanceMaster, Department
 )
+from django.utils.html import format_html
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
     list_display = ['username', 'employee_name', 'employee_id', 'can_assign_trainings', 'is_maker', 'is_checker']
+    list_editable = ['is_maker', 'is_checker']
+    list_display_links = ['username', 'employee_name']
+    actions = ['save_changes']
+
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal Info', {'fields': ('email', 'employee_id', 'employee_name', 'gender', 'date_of_birth', 'blood_group')}),
@@ -24,6 +29,13 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ('username', 'email', 'employee_id', 'employee_name')
     ordering = ('username',)
     filter_horizontal = ('groups', 'user_permissions')
+
+    def save_changes(self, request, queryset):
+        for user in queryset:
+            user.save()
+        self.message_user(request, "Selected changes have been saved.")
+
+    save_changes.short_description = "Save selected changes"
 
 
 class TrainingProgrammeAdmin(admin.ModelAdmin):

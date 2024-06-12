@@ -2,6 +2,8 @@ from django import forms
 from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining
 from django.contrib.admin.widgets import FilteredSelectMultiple
 import logging
+
+logger = logging.getLogger(__name__)
 class RequestTrainingForm(forms.ModelForm):
     class Meta:
         model = RequestTraining
@@ -24,9 +26,11 @@ class RequestTrainingForm(forms.ModelForm):
         other_training = cleaned_data.get("other_training")
 
         if not training_programme and not other_training:
+            logger.error("Validation Error: You must select a training programme or specify another training.")
             raise forms.ValidationError("You must select a training programme or specify another training.")
+        
+        logger.info(f"Form cleaned data: {cleaned_data}")
         return cleaned_data
-
 class TrainingRequestApprovalForm(forms.Form):
     request_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)
     assignment_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)

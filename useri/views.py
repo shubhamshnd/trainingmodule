@@ -13,7 +13,7 @@ from itertools import chain
 from collections import defaultdict
 from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
-from django.db.models import Q , F
+from django.db.models import Q , F , Max
 from datetime import timedelta
 
 def easter_egg_page(request):
@@ -34,18 +34,11 @@ def home(request):
     is_maker = user.is_maker
     is_checker = user.is_checker
 
-    # Determine the highest priority role
-    if is_checker:
-        role = 'checker'
-    elif is_maker:
-        role = 'maker'
-    elif user_is_superior:
-        role = 'superior'
-    else:
-        role = 'member'
-
     context = {
-        'role': role,
+        'is_checker': is_checker,
+        'is_maker': is_maker,
+        'is_superior': user_is_superior,
+        'role': 'checker' if is_checker else ('maker' if is_maker else ('superior' if user_is_superior else 'member')),
     }
 
     response = render(request, 'home.html', context)
@@ -76,7 +69,6 @@ def logout_view(request):
     logout(request)
     return redirect('login')
 
-
 @login_required
 def request_training(request):
     user = request.user
@@ -100,20 +92,31 @@ def request_training(request):
     if request.method == 'POST':
         form = RequestTrainingForm(request.POST)
         if form.is_valid():
+            # Find the current max id and increment by 1 for the new request
+
+            latest_training_request = RequestTraining.objects.order_by('-id').first()
+                    
+            new_id = latest_training_request.id + 1 if latest_training_request else 1
+            logger.info(f"Latest training request ID: {latest_training_request.id if latest_training_request else 'None'}")
+                    # Log the ID of the new training request
+            logger.info(f"New training request ID: {new_id}")
             training_request = form.save(commit=False)
+            training_request.id = new_id
             training_request.custom_user = user
+            training_request.save()
 
             superiors = CustomUser.objects.filter(
                 Q(headed_departments__in=member_departments) |
                 Q(headed_departments__in=member_departments.values_list('sub_departments', flat=True))
             ).distinct()
 
-            logger.info(f"Found superiors: {list(superiors)}")
+            logger.info(f"Training request saved: {training_request}")
+            logger.info(f"Training request ID: {training_request.id}")
 
             if superiors.count() == 1:
+                # If there's only one superior, assign and submit directly
                 superior = superiors.first()
                 training_request.current_approver = superior
-                logger.info(f"Setting current approver to {superior.username}")
                 training_request.save()
                 Approval.objects.create(
                     request_training=training_request,
@@ -122,55 +125,56 @@ def request_training(request):
                     approval_timestamp=timezone.now(),
                     action='pending'
                 )
-                logger.info(f"Approval object created with approver {superior.username}")
                 messages.success(request, "Your training request has been submitted successfully.")
                 return redirect('request_training')
             elif superiors.count() > 1:
-                training_request.save()
-                request.session['training_request_id'] = training_request.id
-                logger.info(f"Multiple superiors found. Training request ID {training_request.id} saved.")
+                # Include the training request ID in the form as a hidden field for selection of superior
                 return render(request, 'request_training.html', {
                     'form': form,
                     'user_requests': RequestTraining.objects.filter(custom_user=user).order_by('-request_date'),
                     'superiors': superiors,
-                    'select_superior': True
+                    'select_superior': True,
+                    'training_request_id': training_request.id
                 })
             else:
                 messages.error(request, "No superior found for your departments.")
-                training_request.delete()
-                logger.error(f"No superiors found for departments {list(member_departments)}. Training request deleted.")
                 return redirect('request_training')
         else:
-            logger.error(f"Form is not valid: {form.errors}")
+            # Handle form errors
+            return render(request, 'request_training.html', {
+                'form': form,
+                'user_requests': RequestTraining.objects.filter(custom_user=user).order_by('-request_date'),
+                'superiors': None,
+                'select_superior': False
+            })
     else:
         form = RequestTrainingForm()
+        superiors = CustomUser.objects.filter(
+            Q(headed_departments__in=member_departments) |
+            Q(headed_departments__in=member_departments.values_list('sub_departments', flat=True))
+        ).distinct()
 
-    superiors = CustomUser.objects.filter(
-        Q(headed_departments__in=member_departments) |
-        Q(headed_departments__in=member_departments.values_list('sub_departments', flat=True))
-    ).distinct()
-    
-    user_requests = RequestTraining.objects.filter(custom_user=user).order_by('-request_date')
-
-    return render(request, 'request_training.html', {
-        'form': form,
-        'user_requests': user_requests,
-        'superiors': superiors,
-        'select_superior': superiors.count() > 1,
-    })
+        logger.info(f"Training request ID (GET request): None")
+        return render(request, 'request_training.html', {
+            'form': form,
+            'user_requests': RequestTraining.objects.filter(custom_user=user).order_by('-request_date'),
+            'superiors': superiors,
+            'select_superior': superiors.count() > 1,
+            'training_request_id': None  # Ensure this key exists in the context even if not used
+        })
 
 @login_required
 def assign_superior(request):
     if request.method == 'POST':
         superior_id = request.POST.get('superior_id')
-        training_request_id = request.session.get('training_request_id')
+        training_request_id = request.POST.get('training_request_id')  # Get the hidden field value
 
         logger.info(f"POST data: {request.POST}")
-        logger.info(f"Session data: {request.session.items()}")
+        logger.info(f"Training request ID on form submission: {training_request_id}")
 
         if not superior_id or not training_request_id:
             messages.error(request, "Invalid superior or training request.")
-            logger.error("Invalid superior or training request.")
+            logger.error("Invalid superior or training request. superior_id: %s, training_request_id: %s", superior_id, training_request_id)
             return redirect('request_training')
 
         try:
@@ -189,9 +193,13 @@ def assign_superior(request):
             logger.info(f"Approval object created with approver {superior.username} for training request ID {training_request_id}")
             messages.success(request, "Your training request has been submitted to the selected superior successfully.")
             return redirect('request_training')
-        except (CustomUser.DoesNotExist, RequestTraining.DoesNotExist) as e:
-            messages.error(request, "Superior or training request not found.")
-            logger.error(f"Error finding superior or training request: {str(e)}")
+        except CustomUser.DoesNotExist:
+            messages.error(request, "Selected superior not found.")
+            logger.error(f"Superior with ID {superior_id} not found.")
+            return redirect('request_training')
+        except RequestTraining.DoesNotExist:
+            messages.error(request, "Training request not found.")
+            logger.error(f"Training request with ID {training_request_id} not found.")
             return redirect('request_training')
     else:
         return redirect('request_training')
@@ -589,27 +597,17 @@ def assign_higher_superior(request):
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------
 @login_required
 def checker_check_requests(request):
-    # Get counts for each training programme and their statuses, including fully processed ones
-    user_requests = RequestTraining.objects.filter(status__id__in=[2, 3, 5]).values('training_programme__title', 'status__name').annotate(count=Count('id'))
-    hod_assignments = HODTrainingAssignment.objects.filter(status__id__in=[2, 3, 5]).values('training_programme__title', 'status__name').annotate(count=Count('id'))
+    # Get user requests and HOD assignments where the final approval timestamp exists
+    user_requests = RequestTraining.objects.filter(final_approval_timestamp__isnull=False).values('training_programme__title').annotate(count=Count('id'))
+    superior_assignments =SuperiorAssignedTraining.objects.filter(final_approval_timestamp__isnull=False).values('training_programme__title' ).annotate(count=Count('id'))
 
-    combined_counts = defaultdict(lambda: {'total': 0, 'HODapproved': 0, 'CKRapproved': 0, 'CKRrejected': 0})
-    
-    for req in user_requests:
-        combined_counts[req['training_programme__title']]['total'] += req['count']
-        combined_counts[req['training_programme__title']][req['status__name']] += req['count']
-    
-    for assignment in hod_assignments:
-        combined_counts[assignment['training_programme__title']]['total'] += assignment['count']
-        combined_counts[assignment['training_programme__title']][assignment['status__name']] += assignment['count']
-    
-    # Convert to list and sort by total count
-    combined_requests = sorted(combined_counts.items(), key=lambda x: x[1]['total'], reverse=True)
-    
+    # Combine counts and sort
+    combined_requests = list(user_requests) + list(superior_assignments)
+    combined_requests.sort(key=lambda x: x['count'], reverse=True)
+
     return render(request, 'checkercheck.html', {
         'combined_requests': combined_requests,
     })
-
 @login_required
 def checker_approve_request(request):
     if request.method == 'POST':

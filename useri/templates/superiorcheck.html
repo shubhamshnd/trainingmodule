@@ -69,15 +69,15 @@
         </div>
         <div class="col-md-9">
             <h2>Check Training Requests</h2>
-            <div class="scrollable-table">
+            <div class="scrollable-table" style="max-height: 90vh; overflow-y: auto;">
                 <table class="table table-primary table-striped">
                     <thead>
                         <tr>
                             <th scope="col">User</th>
                             <th scope="col">Training Programme</th>
                             <th scope="col">Request Date</th>
-                            <th scope="col">Action</th>
                             <th scope="col">Status</th>
+                            <th scope="col">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -101,23 +101,25 @@
                             </td>
                             <td>{{ request.timestamp }}</td>
                             <td>
-                                {% if not request.is_approved and not request.is_rejected %}
-                                    {% if request.assigned_by != user %}
-                                        <button type="button" class="btn btn-success mt-2 me-2" data-bs-toggle="modal" data-bs-target="#approveModal" data-request-id="{{ request.id }}">
-                                            Approve
-                                        </button>
-                                        <button type="button" class="btn btn-danger mt-2" data-bs-toggle="modal" data-bs-target="#rejectModal" data-request-id="{{ request.id }}">
-                                            Reject
-                                        </button>
-                                    {% endif %}
-                                {% endif %}
-                            </td>
-                            <td>
                                 {% for approval in request.approvals.all %}
-                                    <div class="alert {% if approval.action == 'approve' %}alert-success{% else %}alert-danger{% endif %} mt-1 mb-1" role="alert">
+                                    <div class="alert {% if approval.action 'approve' %}alert-success{% else %}alert-danger{% endif %} mt-1 mb-1" role="alert">
                                         {{ approval.action|capfirst }} by {{ approval.approver.employee_name }} on {{ approval.approval_timestamp }}
                                     </div>
                                 {% endfor %}
+                            </td>
+                            <td>
+                                {% if not request.is_approved and not request.is_rejected %}
+                                    {% if request.assigned_by != user %}
+                                        <div class="d-flex">
+                                            <button type="button" class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#approveModal" data-request-id="{{ request.id }}">
+                                                Approve
+                                            </button>
+                                            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal" data-request-id="{{ request.id }}">
+                                                Reject
+                                            </button>
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
