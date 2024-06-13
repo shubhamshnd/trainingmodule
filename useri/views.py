@@ -789,6 +789,7 @@ def checker_training_detail(request, training_programme_title):
         'combined_requests': combined_requests,
         'pending_approval': pending_approval
     })
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 @login_required
 def maker_check_requests(request):
@@ -815,16 +816,14 @@ def maker_check_requests(request):
 
 
 
-
-
 @login_required
 def maker_training_detail(request, training_programme_title):
-    user_requests = RequestTraining.objects.filter(training_programme__title=training_programme_title, status__name='CKRapproved')
-    hod_assignments = HODTrainingAssignment.objects.filter(training_programme__title=training_programme_title, status__name='CKRapproved')
+    user_requests = RequestTraining.objects.filter(training_programme__title=training_programme_title, final_approval_timestamp__isnull=False)
+    superior_assignments = SuperiorAssignedTraining.objects.filter(training_programme__title=training_programme_title, final_approval_timestamp__isnull=False)
 
     combined_requests = sorted(
-        list(user_requests) + list(hod_assignments),
-        key=lambda x: x.request_date if isinstance(x, RequestTraining) else x.assignment_date,
+        list(user_requests) + list(superior_assignments),
+        key=lambda x: x.final_approval_timestamp,
         reverse=True
     )
 
@@ -832,7 +831,6 @@ def maker_training_detail(request, training_programme_title):
         'training_programme_title': training_programme_title,
         'combined_requests': combined_requests,
     })
-    
     
 
 @login_required

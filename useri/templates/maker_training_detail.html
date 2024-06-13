@@ -13,13 +13,9 @@
                     <th scope="col" class="text-nowrap">User</th>
                     <th scope="col" class="text-nowrap">User Department</th>
                     <th scope="col" class="text-nowrap">Source</th>
-                    <th scope="col" class="text-nowrap">HOD</th>
-                    <th scope="col" class="text-nowrap">HOD Department</th>
+                    <th scope="col" class="text-nowrap">Assigned By</th>
                     <th scope="col" class="text-nowrap">Date</th>
-                    <th scope="col" class="text-nowrap">User Comment</th>
-                    <th scope="col" class="text-nowrap">HOD Comment</th>
                     <th scope="col" class="text-nowrap">Checker Comment</th>
-                    <th scope="col" class="text-nowrap">HOD Approval Timestamp</th>
                     <th scope="col" class="text-nowrap">Checker Approval Timestamp</th>
                 </tr>
             </thead>
@@ -30,14 +26,24 @@
                         {% if request|is_instance:'RequestTraining' %}
                             {{ request.custom_user.employee_name }}
                         {% else %}
-                            {{ request.assigned_user.employee_name }}
+                            {% for user in request.assigned_users.all %}
+                                {{ user.employee_name }}<br>
+                            {% endfor %}
                         {% endif %}
                     </td>
                     <td class="text-nowrap">
                         {% if request|is_instance:'RequestTraining' %}
-                            {{ request.custom_user.department }}
+                            {% if request.custom_user.department %}
+                                {{ request.custom_user.department.name }}
+                            {% else %}
+                                N/A
+                            {% endif %}
                         {% else %}
-                            {{ request.assigned_user.department }}
+                            {% if request.department %}
+                                {{ request.department.name }}
+                            {% else %}
+                                N/A
+                            {% endif %}
                         {% endif %}
                     </td>
                     <td class="text-nowrap">
@@ -48,36 +54,20 @@
                         {% endif %}
                     </td>
                     <td class="text-nowrap">
-                        {% if request.hod_user %}
-                            {{ request.hod_user.employee_name }}
+                        {% if request|is_instance:'SuperiorAssignedTraining' %}
+                            {{ request.assigned_by.employee_name }}
                         {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td class="text-nowrap">
-                        {% if request.hod_user %}
-                            {{ request.hod_user.department }}
-                        {% else %}
-                            N/A
+                            -
                         {% endif %}
                     </td>
                     <td class="text-nowrap">
                         {% if request|is_instance:'RequestTraining' %}
                             {{ request.request_date }}
                         {% else %}
-                            {{ request.assignment_date }}
+                            {{ request.created_at }}
                         {% endif %}
                     </td>
-                    <td class="text-nowrap">
-                        {% if request|is_instance:'RequestTraining' %}
-                            {{ request.user_comment }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td class="text-nowrap">{{ request.hod_comment }}</td>
                     <td class="text-nowrap">{{ request.checker_comment }}</td>
-                    <td class="text-nowrap">{{ request.hod_approval_timestamp }}</td>
                     <td class="text-nowrap">{{ request.checker_approval_timestamp }}</td>
                 </tr>
                 {% endfor %}

@@ -112,7 +112,7 @@ class CustomUser(AbstractUser):
     objects = CustomUserManager()
     # Many-to-many relationship with Department
     departments = models.ManyToManyField('Department', related_name='department_members', blank=True)
-
+    card_validity = models.DateField(null=True, blank=True)
     # Specify unique related_name for groups and user_permissions
     groups = models.ManyToManyField(
         'auth.Group',
