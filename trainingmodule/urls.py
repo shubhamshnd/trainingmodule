@@ -28,4 +28,5 @@ urlpatterns = [
     path('select2/', include('django_select2.urls')),
     path('modify/<int:pk>/', views.edit_training, name='modify_training'),
     path('send_training_request/<int:pk>/', views.send_training_request, name='send_training_request'),
+    path('get-department-details/', views.get_department_details, name='get_department_details'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

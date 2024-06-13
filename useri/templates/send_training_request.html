@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
 {% block content %}
-<div class="container">
-  <div class="row justify-content-center">
+<div class="container-fluid">
+  <div class="row">
     <div class="col-md-3">
       <h2>Training Details</h2>
       <div class="mb-3">
@@ -49,66 +49,25 @@
         {% endif %}
         <button type="submit" class="btn btn-primary">Save</button>
         <a href="{% url 'create_training' %}" class="btn btn-secondary">Back</a>
-    </div>
-
-    <div class="col-md-6" style="overflow-y: auto; max-height: 85vh;">
-      <h2>Select Users</h2>
-      <div class="form-group">
-        <label for="department-select">Select Department:</label>
-        <select id="department-select" class="form-control">
-          <option value="">Select Department</option>
-          {% for department in departments %}
-          <option value="{{ department }}">{{ department }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div id="user-selection" style="display: none;">
-        <h4>HOD(s)</h4>
-        <ul class="list-group" id="hods-list">
-          {% for hod in hods %}
-          <li class="list-group-item {% if hod.id in attendances %}bg-success text-white{% endif %}" data-department="{{ hod.department }}">
-            <input type="checkbox" name="selected_users" value="{{ hod.id }}" class="user-checkbox" data-id="{{ hod.id }}" data-name="{{ hod.employee_name }}" data-department="{{ hod.department }}" {% if hod.id in training.selected_participants.all %}checked{% endif %}>
-            {{ hod.employee_name }} ({{ hod.username }})
-          </li>
-          {% endfor %}
-        </ul>
-        
-        <div class="row">
-          <div class="col-md-6">
-            <h4>Associates</h4>
-            <ul class="list-group" id="associates-list">
-              {% for associate in associates|dictsort:"contractor_name" %}
-              <li class="list-group-item {% if associate.id in attendances %}bg-success text-white{% endif %}" data-department="{{ associate.department }}">
-                <input type="checkbox" name="selected_users" value="{{ associate.id }}" class="user-checkbox" data-id="{{ associate.id }}" data-name="{{ associate.employee_name }}" data-department="{{ associate.department }}" {% if associate.id in training.selected_participants.all %}checked{% endif %}>
-                {{ associate.employee_name }} - {{ associate.username }} - {{ associate.contractor_name }}
-              </li>
-              {% endfor %}
-            </ul>
-          </div>
-          <div class="col-md-6">
-            <h4>Employees</h4>
-            <ul class="list-group" id="employees-list">
-              {% for employee in employees %}
-              {% if employee.role.name != 'HOD' and employee.role.name != 'Checker' %}
-              <li class="list-group-item {% if employee.id in attendances %}bg-success text-white{% endif %}" data-department="{{ employee.department }}">
-                <input type="checkbox" name="selected_users" value="{{ employee.id }}" class="user-checkbox" data-id="{{ employee.id }}" data-name="{{ employee.employee_name }}" data-department="{{ employee.department }}" {% if employee.id in training.selected_participants.all %}checked{% endif %}>
-                {{ employee.employee_name }} ({{ employee.username }})
-              </li>
-              {% endif %}
-              {% endfor %}
-            </ul>
-          </div>
-        </div>
-      </div>
+      </form>
     </div>
 
     <div class="col-md-3">
-      <h3>Selected Users (<span id="total-selected">0</span>)</h3>
-      <div class="selected-users-list" id="selected-users-list">
-        <!-- Selected users will be displayed here -->
+      <h2>Departments</h2>
+      <div class="list-group" id="department-list" style="height: 75vh; overflow-y: auto;">
+        {% for department in departments %}
+        <a href="#" class="list-group-item list-group-item-action department-item" data-department-id="{{ department.id }}">
+          {{ department.name }}
+        </a>
+        {% endfor %}
       </div>
-      </form>
+    </div>
+
+    <div class="col-md-6">
+      <h2>Department Details</h2>
+      <div id="department-details" style="height: 75vh; overflow-y: auto;">
+        <!-- Department details will be populated here -->
+      </div>
     </div>
   </div>
 </div>
@@ -122,89 +81,87 @@
   }
 </style>
 
+
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const departmentSelect = document.getElementById('department-select');
-    const userSelection = document.getElementById('user-selection');
-    const hodsList = document.getElementById('hods-list').children;
-    const associatesList = document.getElementById('associates-list').children;
-    const employeesList = document.getElementById('employees-list').children;
-    const selectedUsersList = document.getElementById('selected-users-list');
-    const totalSelected = document.getElementById('total-selected');
-
-    departmentSelect.addEventListener('change', function() {
-      const selectedDepartment = this.value;
-
-      if (selectedDepartment) {
-        userSelection.style.display = 'block';
-
-        Array.from(hodsList).forEach(item => {
-          if (item.getAttribute('data-department') === selectedDepartment) {
-            item.style.display = 'block';
-          } else {
-            item.style.display = 'none';
-          }
-        });
-
-        Array.from(associatesList).forEach(item => {
-          if (item.getAttribute('data-department') === selectedDepartment) {
-            item.style.display = 'block';
-          } else {
-            item.style.display = 'none';
-          }
-        });
-
-        Array.from(employeesList).forEach(item => {
-          if (item.getAttribute('data-department') === selectedDepartment) {
-            item.style.display = 'block';
-          } else {
-            item.style.display = 'none';
-          }
-        });
-
-      } else {
-        userSelection.style.display = 'none';
-      }
-    });
-
+  $(document).ready(function() {
     function updateSelectedUsersList() {
-      const selectedUsers = document.querySelectorAll('.user-checkbox:checked');
-      selectedUsersList.innerHTML = '';
+      const selectedUsers = $('.user-checkbox:checked');
+      const selectedUsersList = $('#selected-users-list');
+      const totalSelected = $('#total-selected');
+      selectedUsersList.empty();
       let totalCount = 0;
-      const departmentCounts = {};
 
-      selectedUsers.forEach(item => {
-        const department = item.getAttribute('data-department');
-        if (!departmentCounts[department]) {
-          departmentCounts[department] = {
-            count: 0,
-            users: []
-          };
-        }
-        departmentCounts[department].count++;
-        departmentCounts[department].users.push(item.getAttribute('data-name'));
+      selectedUsers.each(function() {
+        const userName = $(this).data('name');
+        const userId = $(this).data('id');
+        selectedUsersList.append(`<div>${userName} (ID: ${userId})</div>`);
         totalCount++;
       });
 
-      totalSelected.textContent = totalCount;
-      selectedUsersList.innerHTML = '';
-
-      for (const [department, { count, users }] of Object.entries(departmentCounts)) {
-        const departmentItem = document.createElement('div');
-        departmentItem.innerHTML = `<strong>${department}: ${count}</strong>`;
-        const userList = document.createElement('ul');
-        users.forEach(user => {
-          const userItem = document.createElement('li');
-          userItem.textContent = user;
-          userList.appendChild(userItem);
-        });
-        departmentItem.appendChild(userList);
-        selectedUsersList.appendChild(departmentItem);
-      }
+      totalSelected.text(totalCount);
     }
 
-    document.querySelectorAll('.user-checkbox').forEach(item => {
-      item.addEventListener('change', updateSelectedUsersList);
+    function loadDepartmentDetails(departmentId) {
+      const trainingId = '{{ training.id }}';
+      $.ajax({
+        url: `{% url 'get_department_details' %}`,
+        method: 'GET',
+        data: {
+          department_id: departmentId,
+          training_id: trainingId
+        },
+        success: function(data) {
+          const department = data.department;
+          const head = department.head;
+          const associates = department.associates;
+          const employees = department.employees;
+
+          let detailsHtml = `
+            <h4>Department Head: ${head.employee_name} (${head.username})</h4>
+            <h4>Associates</h4>
+            <input type="checkbox" id="select-all-associates"> Select All
+            <ul class="list-group">
+          `;
+          associates.forEach(associate => {
+            detailsHtml += `
+              <li class="list-group-item">
+                <input type="checkbox" class="associate-checkbox user-checkbox" data-id="${associate.id}" data-name="${associate.employee_name}" ${associate.selected ? 'checked' : ''}>
+                ${associate.employee_name} - ${associate.username}
+              </li>
+            `;
+          });
+          detailsHtml += `</ul><h4>Employees</h4><input type="checkbox" id="select-all-employees"> Select All<ul class="list-group">`;
+          employees.forEach(employee => {
+            detailsHtml += `
+              <li class="list-group-item">
+                <input type="checkbox" class="employee-checkbox user-checkbox" data-id="${employee.id}" data-name="${employee.employee_name}" ${employee.selected ? 'checked' : ''}>
+                ${employee.employee_name} (${employee.username})
+              </li>
+            `;
+          });
+          detailsHtml += '</ul>';
+
+          $('#department-details').html(detailsHtml);
+          $('.user-checkbox').change(updateSelectedUsersList);
+          $('#select-all-associates').change(function() {
+            $('.associate-checkbox').prop('checked', this.checked);
+            updateSelectedUsersList();
+          });
+          $('#select-all-employees').change(function() {
+            $('.employee-checkbox').prop('checked', this.checked);
+            updateSelectedUsersList();
+          });
+        },
+        error: function() {
+          $('#department-details').html('<p>Error loading department details.</p>');
+        }
+      });
+    }
+
+    $('.department-item').click(function(e) {
+      e.preventDefault();
+      const departmentId = $(this).data('department-id');
+      loadDepartmentDetails(departmentId);
     });
 
     updateSelectedUsersList(); // Initial call to populate selected users list

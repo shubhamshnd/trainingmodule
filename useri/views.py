@@ -15,7 +15,7 @@ from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
 from django.db.models import Q , F , Max
 from datetime import timedelta
-
+from django.http import JsonResponse
 def easter_egg_page(request):
     context = {
         'range_170': range(170),
@@ -909,11 +909,8 @@ def send_training_request(request, pk):
     else:
         form = TrainingRequestForm(instance=training)
 
-    departments = CustomUser.objects.values_list('department', flat=True).distinct()
-    hods = CustomUser.objects.filter(Q(role__name='HOD') | Q(role__name='Checker')).distinct()
-    associates = CustomUser.objects.filter(work_order_no__isnull=False).exclude(work_order_no='')
-    employees = CustomUser.objects.filter(Q(work_order_no__isnull=True) | Q(work_order_no=''))
-
+    departments = Department.objects.prefetch_related('sub_departments', 'sub_departments__members').all()
+    
     if training.training_programme:
         validity_period = training.training_programme.validity
         valid_date = timezone.now().date() - timedelta(days=365 * validity_period)
@@ -929,12 +926,30 @@ def send_training_request(request, pk):
         'training': training,
         'venue_type': venue_type,
         'departments': departments,
-        'hods': hods,
-        'associates': associates,
-        'employees': employees,
         'attendances': list(attendances),
     })
 
+@login_required
+def get_department_details(request):
+    department_id = request.GET.get('department_id')
+    training_id = request.GET.get('training_id')
+    department = get_object_or_404(Department, id=department_id)
+    training = get_object_or_404(TrainingSession, id=training_id)
+    associates = department.associates.all()
+    employees = department.members.all()
+    head = department.head
+
+    associates_data = [{'id': assoc.id, 'employee_name': assoc.employee_name, 'username': assoc.username, 'selected': assoc.id in training.selected_participants.all()} for assoc in associates]
+    employees_data = [{'id': emp.id, 'employee_name': emp.employee_name, 'username': emp.username, 'selected': emp.id in training.selected_participants.all()} for emp in employees]
+    head_data = {'employee_name': head.employee_name, 'username': head.username} if head else {}
+
+    return JsonResponse({
+        'department': {
+            'head': head_data,
+            'associates': associates_data,
+            'employees': employees_data,
+        }
+    })
 
 @login_required
 def edit_training(request, pk):
