@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department
+from .models import CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme
 from django.views.decorators.csrf import csrf_protect
 from django.http import HttpResponse
 from .forms import RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm , SuperiorAssignmentForm
@@ -89,37 +89,34 @@ def request_training(request):
     else:
         logger.info(f"User {user.username} is not associated with any departments.")
 
-    # Calculate the new training request ID globally within this view
-    latest_training_request = RequestTraining.objects.order_by('-id').first()
-    new_id = latest_training_request.id + 1 if latest_training_request else 1
-    logger.info(f"New training request ID: {new_id}")
-
     if request.method == 'POST':
         form = RequestTrainingForm(request.POST)
         if form.is_valid():
-            training_request = form.save(commit=False)
-            training_request.id = new_id  # Use the globally calculated new ID
-            training_request.custom_user = user
-            training_request.save()
-
-            request.session['training_request_id'] = training_request.id  # Store the ID in session
+            training_request_data = {
+                'training_programme': form.cleaned_data['training_programme'].id if form.cleaned_data['training_programme'] else None,
+                'other_training': form.cleaned_data['other_training'],
+                'user_comment': form.cleaned_data['user_comment']
+            }
+            request.session['training_request_data'] = training_request_data
 
             superiors = CustomUser.objects.filter(
                 Q(headed_departments__in=member_departments) |
                 Q(headed_departments__in=member_departments.values_list('sub_departments', flat=True))
             ).distinct()
 
-            logger.info(f"Training request saved: {training_request}")
-            logger.info(f"Training request ID: {training_request.id}")
-
             if superiors.count() == 1:
                 # If there's only one superior, assign and submit directly
-                superior = superiors.first()
-                training_request.current_approver = superior
-                training_request.save()
+                training_programme = TrainingProgramme.objects.get(id=training_request_data['training_programme']) if training_request_data['training_programme'] else None
+                training_request = RequestTraining.objects.create(
+                    custom_user=user,
+                    current_approver=superiors.first(),
+                    training_programme=training_programme,
+                    other_training=training_request_data['other_training'],
+                    user_comment=training_request_data['user_comment']
+                )
                 Approval.objects.create(
                     request_training=training_request,
-                    approver=superior,
+                    approver=superiors.first(),
                     comment="Auto-assigned to superior",
                     approval_timestamp=timezone.now(),
                     action='pending'
@@ -127,13 +124,12 @@ def request_training(request):
                 messages.success(request, "Your training request has been submitted successfully.")
                 return redirect('request_training')
             elif superiors.count() > 1:
-                # Include the training request ID in the form as a hidden field for selection of superior
+                # Render the page with the modal for selecting a superior
                 return render(request, 'request_training.html', {
                     'form': form,
                     'user_requests': RequestTraining.objects.filter(custom_user=user).order_by('-request_date'),
                     'superiors': superiors,
-                    'select_superior': True,
-                    'training_request_id': training_request.id  # Pass the training request ID to the template
+                    'select_superior': True
                 })
             else:
                 messages.error(request, "No superior found for your departments.")
@@ -148,39 +144,37 @@ def request_training(request):
             })
     else:
         form = RequestTrainingForm()
-        superiors = CustomUser.objects.filter(
-            Q(headed_departments__in=member_departments) |
-            Q(headed_departments__in=member_departments.values_list('sub_departments', flat=True))
-        ).distinct()
-
         return render(request, 'request_training.html', {
             'form': form,
             'user_requests': RequestTraining.objects.filter(custom_user=user).order_by('-request_date'),
-            'superiors': superiors,
-            'select_superior': superiors.count() > 1,
-            'training_request_id': None  # Ensure this key exists in the context even if not used
+            'superiors': None,
+            'select_superior': False
         })
-
 @login_required
 def assign_superior(request):
     if request.method == 'POST':
         superior_id = request.POST.get('superior_id')
-        training_request_id = request.session.get('training_request_id')  # Retrieve the ID from session
+        training_request_data = request.session.get('training_request_data')
+        user = request.user
 
         logger.info(f"POST data: {request.POST}")
-        logger.info(f"Training request ID on form submission: {training_request_id}")
+        logger.info(f"Training request data from session: {training_request_data}")
 
-        if not superior_id or not training_request_id:
+        if not superior_id or not training_request_data:
             messages.error(request, "Invalid superior or training request.")
-            logger.error("Invalid superior or training request. superior_id: %s, training_request_id: %s", superior_id, training_request_id)
+            logger.error("Invalid superior or training request. superior_id: %s, training_request_data: %s", superior_id, training_request_data)
             return redirect('request_training')
 
         try:
             superior = CustomUser.objects.get(id=superior_id)
-            training_request = RequestTraining.objects.get(id=training_request_id)
-            training_request.current_approver = superior
-            logger.info(f"Setting current approver to {superior.username} for training request ID {training_request_id}")
-            training_request.save()
+            training_programme = TrainingProgramme.objects.get(id=training_request_data['training_programme']) if training_request_data['training_programme'] else None
+            training_request = RequestTraining.objects.create(
+                custom_user=user,
+                current_approver=superior,
+                training_programme=training_programme,
+                other_training=training_request_data['other_training'],
+                user_comment=training_request_data['user_comment']
+            )
             Approval.objects.create(
                 request_training=training_request,
                 approver=superior,
@@ -188,16 +182,16 @@ def assign_superior(request):
                 approval_timestamp=timezone.now(),
                 action='pending'
             )
-            logger.info(f"Approval object created with approver {superior.username} for training request ID {training_request_id}")
+            logger.info(f"Approval object created with approver {superior.username} for training request ID {training_request.id}")
             messages.success(request, "Your training request has been submitted to the selected superior successfully.")
             return redirect('request_training')
         except CustomUser.DoesNotExist:
             messages.error(request, "Selected superior not found.")
             logger.error(f"Superior with ID {superior_id} not found.")
             return redirect('request_training')
-        except RequestTraining.DoesNotExist:
-            messages.error(request, "Training request not found.")
-            logger.error(f"Training request with ID {training_request_id} not found.")
+        except TrainingProgramme.DoesNotExist:
+            messages.error(request, "Selected training programme not found.")
+            logger.error(f"Training programme with ID {training_request_data['training_programme']} not found.")
             return redirect('request_training')
     else:
         return redirect('request_training')
