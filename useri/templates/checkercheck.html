@@ -7,11 +7,10 @@
 
     {% if combined_requests %}
         <div style="max-height: 90vh; overflow-y: auto;">
-            <table class="table">
+            <table class="table text-center">
                 <thead>
                     <tr>
                         <th scope="col">Training</th>
-                        <th scope="col">Total</th>
                         <th scope="col">Pending</th>
                         <th scope="col">Approved</th>
                         <th scope="col">Rejected</th>
@@ -19,15 +18,14 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for training, counts in combined_requests %}
+                    {% for title, counts in combined_requests.items %}
                     <tr>
-                        <td>{{ training }}</td>
-                        <td>{{ counts.total }}</td>
-                        <td>{{ counts.HODapproved }}</td>
-                        <td>{{ counts.CKRapproved }}</td>
-                        <td>{{ counts.CKRrejected }}</td>
+                        <td>{{ title }}</td>
+                        <td>{{ counts.pending }}</td>
+                        <td>{{ counts.approved }}</td>
+                        <td>{{ counts.rejected }}</td>
                         <td>
-                            <a href="{% url 'checker_training_detail' training %}" class="btn btn-info">Details</a>
+                            <a href="{% url 'checker_training_detail' title %}" class="btn btn-info">Details</a>
                         </td>
                     </tr>
                     {% endfor %}

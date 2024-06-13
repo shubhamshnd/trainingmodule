@@ -1,4 +1,3 @@
-<!-- superiorcheck.html -->
 {% extends 'base.html' %}
 {% load custom_filters %}
 {% block title %}Superior Check Requests{% endblock %}
@@ -102,11 +101,11 @@
                             <td>{{ request.timestamp }}</td>
                             <td>
                                 {% for approval in request.approvals.all %}
-                                    <div class="alert {% if approval.action 'approve' %}alert-success{% else %}alert-danger{% endif %} mt-1 mb-1" role="alert">
+                                    <div class="alert {% if approval.action == "approve" %}alert-success{% else %}alert-danger{% endif %} mt-1 mb-1" role="alert">
                                         {{ approval.action|capfirst }} by {{ approval.approver.employee_name }} on {{ approval.approval_timestamp }}
                                     </div>
                                 {% endfor %}
-                            </td>
+                            </td>                            
                             <td>
                                 {% if not request.is_approved and not request.is_rejected %}
                                     {% if request.assigned_by != user %}
@@ -149,6 +148,21 @@
                         <div class="mb-3">
                             <label for="hod_comment" class="form-label">Comment</label>
                             <textarea name="hod_comment" id="approve_comment" class="form-control" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="approve_type" class="form-label">Approve For</label>
+                            <select name="approve_type" id="approve_type" class="form-select" required>
+                                <option value="department">Your Department</option>
+                                <option value="parent_department">Parent Department</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="parent_department_head_container" style="display: none;">
+                            <label for="parent_department_head_id" class="form-label">Select Parent Department Head</label>
+                            <select name="parent_department_head_id" id="parent_department_head_id" class="form-select">
+                                {% for head, dept_name in parent_department_heads %}
+                                    <option value="{{ head.id }}">{{ dept_name }} - {{ head.employee_name }} ({{ head.username }})</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <button type="submit" class="btn btn-success">Approve</button>
                     </form>

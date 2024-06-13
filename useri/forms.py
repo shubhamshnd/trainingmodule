@@ -31,10 +31,13 @@ class RequestTrainingForm(forms.ModelForm):
         
         logger.info(f"Form cleaned data: {cleaned_data}")
         return cleaned_data
+    
+    
+    
 class TrainingRequestApprovalForm(forms.Form):
     request_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)
     assignment_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)
-    status_id = forms.IntegerField(widget=forms.HiddenInput())
+    status_id = forms.IntegerField(widget=forms.HiddenInput(), required=False)  # Updated to required=False
     hod_comment = forms.CharField(widget=forms.Textarea, label='Comment', required=False)
     action = forms.ChoiceField(choices=[('approve', 'Approve'), ('reject', 'Reject')], widget=forms.HiddenInput())
 
@@ -48,15 +51,16 @@ class TrainingRequestApprovalForm(forms.Form):
 
         if not request_id and not assignment_id:
             raise forms.ValidationError("Request ID or Assignment ID is required.")
-        if not status_id:
-            raise forms.ValidationError("Status ID is required.")
+        if request_id and not status_id:
+            raise forms.ValidationError("Status ID is required for request approvals.")
         if not hod_comment:
             raise forms.ValidationError("Comment is required.")
         if not action:
             raise forms.ValidationError("Action is required.")
 
         return cleaned_data
-
+    
+    
 class SuperiorAssignmentForm(forms.ModelForm):
     assigned_users = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
@@ -79,7 +83,7 @@ class SuperiorAssignmentForm(forms.ModelForm):
         if superior_user:
             self.superior_user = superior_user
             self.fields['assigned_users'].queryset = CustomUser.objects.filter(
-                user_departments__in=superior_user.headed_departments.all()
+                user_departments__in=self.get_all_headed_departments(superior_user)
             ).distinct()
             self.fields['assigned_users'].label_from_instance = self.label_from_instance
         self.fields['training_programme'].queryset = TrainingProgramme.objects.all()
@@ -97,6 +101,20 @@ class SuperiorAssignmentForm(forms.ModelForm):
         if not training_programme and not other_training:
             raise forms.ValidationError("You must select a training programme or specify another training.")
         return cleaned_data
+
+    def get_all_headed_departments(self, superior_user):
+        def get_sub_departments(department):
+            all_departments = [department]
+            sub_departments = department.sub_departments.all()
+            for sub_dept in sub_departments:
+                all_departments.extend(get_sub_departments(sub_dept))
+            return all_departments
+        
+        all_departments = []
+        for department in superior_user.headed_departments.all():
+            all_departments.extend(get_sub_departments(department))
+        
+        return all_departments
 
     def get_hierarchical_departments(self):
         def get_sub_departments(department):
@@ -312,7 +330,7 @@ class DepartmentAdminForm(forms.ModelForm):
                 self.fields['head_role'].initial = ''
 
         # Dynamically add member role fields
-        if self.instance:
+        if self.instance and self.instance.pk:
             for member in self.instance.members.all():
                 role_field_name = f'member_{member.pk}_role'
                 self.fields[role_field_name] = forms.ChoiceField(
@@ -329,11 +347,15 @@ class DepartmentAdminForm(forms.ModelForm):
                     self.fields[role_field_name].initial = ''
 
         # Add counts to the form instance for the template
-        self.associate_count = self.instance.associates.count()
-        self.member_count = self.instance.members.count()
+        self.associate_count = self.instance.associates.count() if self.instance.pk else 0
+        self.member_count = self.instance.members.count() if self.instance.pk else 0
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+
+        # Save instance first to get an ID for many-to-many operations
+        if commit:
+            instance.save()
 
         # Save head_role
         if instance.head:
@@ -343,11 +365,10 @@ class DepartmentAdminForm(forms.ModelForm):
             instance.head.save()
 
         if commit:
-            instance.save()
             self.save_m2m()
 
         # Save roles for each member
-        if instance:
+        if instance.pk:
             for member in instance.members.all():
                 role_field_name = f'member_{member.pk}_role'
                 member_role = self.cleaned_data.get(role_field_name, '')
