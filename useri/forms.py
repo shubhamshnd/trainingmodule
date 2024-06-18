@@ -419,16 +419,33 @@ class ParticipantsForm(forms.Form):
         user = kwargs.pop('user', None)
         training = kwargs.pop('training', None)
         super().__init__(*args, **kwargs)
-        
-        if user:
+
+        if user and training:
             departments = Department.objects.filter(head=user)
-            if training:
-                self.fields['available_employees'].queryset = CustomUser.objects.filter(user_departments__in=departments).distinct().exclude(id__in=training.selected_participants.all())
-                self.fields['available_associates'].queryset = CustomUser.objects.filter(associated_departments__in=departments).distinct().exclude(id__in=training.selected_participants.all())
-                self.fields['nominated_employees'].queryset = CustomUser.objects.filter(id__in=training.selected_participants.all(), user_departments__in=departments).distinct()
-                self.fields['nominated_associates'].queryset = CustomUser.objects.filter(id__in=training.selected_participants.all(), associated_departments__in=departments).distinct()
-            else:
-                self.fields['available_employees'].queryset = CustomUser.objects.filter(user_departments__in=departments).distinct()
-                self.fields['available_associates'].queryset = CustomUser.objects.filter(associated_departments__in=departments).distinct()
-                self.fields['nominated_employees'].queryset = CustomUser.objects.none()
-                self.fields['nominated_associates'].queryset = CustomUser.objects.none()
+            selected_participants_ids = training.selected_participants.values_list('id', flat=True)
+
+            available_employees_qs = CustomUser.objects.filter(
+                user_departments__in=departments
+            ).distinct().exclude(id__in=selected_participants_ids)
+
+            available_associates_qs = CustomUser.objects.filter(
+                associated_departments__in=departments
+            ).distinct().exclude(id__in=selected_participants_ids)
+
+            nominated_employees_qs = CustomUser.objects.filter(
+                id__in=selected_participants_ids, user_departments__in=departments
+            ).distinct()
+
+            nominated_associates_qs = CustomUser.objects.filter(
+                id__in=selected_participants_ids, associated_departments__in=departments
+            ).distinct()
+
+            self.fields['available_employees'].queryset = available_employees_qs
+            self.fields['available_associates'].queryset = available_associates_qs
+            self.fields['nominated_employees'].queryset = nominated_employees_qs
+            self.fields['nominated_associates'].queryset = nominated_associates_qs
+
+            logger.info(f"Available Employees Queryset: {available_employees_qs.values_list('id', flat=True)}")
+            logger.info(f"Available Associates Queryset: {available_associates_qs.values_list('id', flat=True)}")
+            logger.info(f"Nominated Employees Queryset: {nominated_employees_qs.values_list('id', flat=True)}")
+            logger.info(f"Nominated Associates Queryset: {self.fields['nominated_associates'].queryset.values_list('id', flat=True)}")

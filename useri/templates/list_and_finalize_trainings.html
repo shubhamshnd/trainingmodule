@@ -1,82 +1,78 @@
-          
-          {% extends 'base.html' %}
-          {% load static %}
-          {% block content %}
-          
-          <div class="container-fluid">
-              <div class="row">
-                  <div class="col-md-6">
-                      <h2>Training Sessions</h2>
-                      <div class="table-responsive" style="max-height: 90vh; overflow-y: auto;">
-                          <table class="table table-hover table-sm">
-                              <thead>
-                                  <tr>
-                                      <th>Title</th>
-                                      <th>Time</th>
-                                      <th>Venue</th>
-                                      <th>Trainer</th>
-                                      <th>Status</th>
-                                  </tr>
-                              </thead>
-                              <tbody id="training-sessions-body">
-                                  {% for info in training_info %}
-                                      <tr data-training-id="{{ info.training.id }}" class="training-row {% if info.status == 'Approved' %}table-success{% endif %}">
-                                          <td>{{ info.training.training_programme.title }}</td>
-                                          <td>{{ info.training.date }} {{ info.training.from_time }} - {{ info.training.to_time }}</td>
-                                          <td>{{ info.training.venue.name }}</td>
-                                          <td>{{ info.training.trainer.name }}</td>
-                                          <td>{{ info.status }}</td>
-                                      </tr>
-                                  {% endfor %}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
-                  <div class="col-md-6">
-                      <h2>Manage Participants</h2>
-                      <form method="post" id="participants-form">
-                          {% csrf_token %}
-                          <input type="hidden" name="training_id" id="training-id">
-          <!-- Employees Section -->
-            <div class="mb-3 row align-items-center">
-                <div class="col-md-5">
-                    <label for="available_employees">Available employees:</label>
-                    <select multiple class="form-control filtered-multiple" id="available_employees"></select>
-                </div>
-                <div class="col-md-2 d-flex flex-column align-items-center">
-                    <button type="button" class="btn btn-primary mb-2 arrows" id="add_employee">&gt;</button>
-                    <button type="button" class="btn btn-primary arrows" id="remove_employee">&lt;</button>
-                </div>
-                <div class="col-md-5">
-                    <label for="nominated_employees">Nominated employees:</label>
-                    <select multiple class="form-control filtered-multiple" id="nominated_employees" name="nominated_employees"></select>
-                </div>
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-6">
+            <h2>Training Sessions</h2>
+            <div class="table-responsive" style="max-height: 90vh; overflow-y: auto;">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Time</th>
+                            <th>Venue</th>
+                            <th>Trainer</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="training-sessions-body">
+                        {% for info in training_info %}
+                            <tr data-training-id="{{ info.training.id }}" class="training-row {% if info.status == 'Approved' %}table-success{% endif %}">
+                                <td>{{ info.training.training_programme.title }}</td>
+                                <td>{{ info.training.date }} {{ info.training.from_time }} - {{ info.training.to_time }}</td>
+                                <td>{{ info.training.venue.name }}</td>
+                                <td>{{ info.training.trainer.name }}</td>
+                                <td>{{ info.status }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-
-            <!-- Associates Section -->
-            <div class="mb-3 row align-items-center">
-                <div class="col-md-5">
-                    <label for="available_associates">Available associates:</label>
-                    <select multiple class="form-control filtered-multiple" id="available_associates"></select>
+        </div>
+        <div class="col-md-6">
+            <h2>Manage Participants</h2>
+            <form method="post" id="participants-form">
+                {% csrf_token %}
+                <input type="hidden" name="training_id" id="training-id">
+                <!-- Employees Section -->
+                <div class="mb-3 row align-items-center">
+                    <div class="col-md-5">
+                        <label for="available_employees">Available employees:</label>
+                        <select multiple class="form-control filtered-multiple" id="available_employees"></select>
+                    </div>
+                    <div class="col-md-2 d-flex flex-column align-items-center">
+                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_employee">&gt;</button>
+                        <button type="button" class="btn btn-primary arrows" id="remove_employee">&lt;</button>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="nominated_employees">Nominated employees:</label>
+                        <select multiple class="form-control filtered-multiple" id="nominated_employees" name="nominated_employees"></select>
+                    </div>
                 </div>
-                <div class="col-md-2 d-flex flex-column align-items-center">
-                    <button type="button" class="btn btn-primary mb-2 arrows" id="add_associate">&gt;</button>
-                    <button type="button" class="btn btn-primary arrows" id="remove_associate">&lt;</button>
+                <!-- Associates Section -->
+                <div class="mb-3 row align-items-center">
+                    <div class="col-md-5">
+                        <label for="available_associates">Available associates:</label>
+                        <select multiple class="form-control filtered-multiple" id="available_associates"></select>
+                    </div>
+                    <div class="col-md-2 d-flex flex-column align-items-center">
+                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_associate">&gt;</button>
+                        <button type="button" class="btn btn-primary arrows" id="remove_associate">&lt;</button>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="nominated_associates">Nominated associates:</label>
+                        <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates"></select>
+                    </div>
                 </div>
-                <div class="col-md-5">
-                    <label for="nominated_associates">Nominated associates:</label>
-                    <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates"></select>
+                <div id="removal-comments">
+                    <input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;">
                 </div>
-            </div>
-
-            <div id="removal-comments">
-                <input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;">
-            </div>
-            <button type="button" class="btn btn-primary" id="save-button" style="display: none;">Save Changes</button>
-            <button type="button" class="btn btn-primary" id="confirm-button" style="display: none;">Confirm Participants</button>
-        </form>
+                <button type="button" class="btn btn-primary" id="save-button" style="display: none;">Save Changes</button>
+                <button type="button" class="btn btn-primary" id="confirm-button" style="display: none;">Confirm Participants</button>
+            </form>
+        </div>
     </div>
-</div>
 </div>
 <!-- Modal for Final Confirmation -->
 <div class="modal fade" id="finalizeModal" tabindex="-1" aria-labelledby="finalizeModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -104,7 +100,6 @@
     .filtered-multiple {
         height: 200px;
     }
-
     .loader {
         border: 8px solid #f3f3f3;
         border-top: 8px solid #3498db;
@@ -113,28 +108,22 @@
         height: 60px;
         animation: spin 1s linear infinite;
     }
-
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
-
     .align-items-center {
         align-items: center;
     }
-
     .d-flex {
         display: flex;
     }
-
     .flex-column {
         flex-direction: column;
     }
-
     .justify-content-center {
         justify-content: center;
     }
-
     .table-sm {
         font-size: 0.85rem;
     }

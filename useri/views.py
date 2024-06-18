@@ -1015,22 +1015,21 @@ def get_training_selected_users(request, pk):
     })
     
 
+
 APPROVAL_THRESHOLD_HOURS = 48
 
 @login_required
 def list_and_finalize_trainings(request):
     user = request.user
     departments = Department.objects.filter(head=user)
-    approval_threshold_hours = 48
 
     if not departments.exists():
         logger.info(f"User {user.username} is not head of any departments.")
-        return render(request, 'list_and_finalize_trainings.html', {
-            'training_sessions': [],
-        })
+        return render(request, 'list_and_finalize_trainings.html', {'training_info': []})
 
     logger.info(f"User {user.username} is head of the following departments: {[dept.name for dept in departments]}")
 
+    # Apply the filter condition
     training_sessions = TrainingSession.objects.filter(
         selected_participants__user_departments__in=departments
     ).distinct().order_by('-date', '-from_time')
@@ -1039,50 +1038,44 @@ def list_and_finalize_trainings(request):
     logger.info(f"Current time: {current_time}")
     training_info = []
 
-    pending_training_sessions = []
-
     for training in training_sessions:
-        training_datetime = datetime.combine(training.date, training.from_time)
-        if training_datetime.tzinfo is None:
-            training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
-        
-        is_past_training = training_datetime < current_time
-        is_within_threshold = training_datetime - timedelta(hours=approval_threshold_hours) < current_time
-        
-        # Check if the training session has been approved by the head
-        approved_by_head = TrainingApproval.objects.filter(training_session=training, head=user, approved=True).exists()
-        
-        show_confirm_button = not training.finalized and not is_past_training and not is_within_threshold and not approved_by_head
-        allow_modification = not training.finalized and not is_past_training and not is_within_threshold
-        status = "Approved" if is_past_training or (training.finalized and is_within_threshold) or approved_by_head else "Pending"
+        selected_participants = training.selected_participants.all()
+        it_department = departments.filter(name="INFORMATION TECHNOLOGY").first()
 
-        logger.info(
-            f"Training: {training.training_programme.title}, Date: {training.date}, "
-            f"From Time: {training.from_time}, To Time: {training.to_time}, "
-            f"Finalized: {training.finalized}, Is Past Training: {is_past_training}, "
-            f"Is Within Threshold: {is_within_threshold}, Show Confirm Button: {show_confirm_button}, "
-            f"Allow Modification: {allow_modification}, Status: {status}, Approved by Head: {approved_by_head}"
-        )
+        it_participants = selected_participants.filter(user_departments=it_department) | selected_participants.filter(associated_departments=it_department)
 
-        if status == "Pending":
-            pending_training_sessions.append(training)
+        if it_participants.exists():
+            training_datetime = datetime.combine(training.date, training.from_time)
+            if training_datetime.tzinfo is None:
+                training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
 
-        training_info.append({
-            'training': training,
-            'show_confirm_button': show_confirm_button,
-            'allow_modification': allow_modification,
-            'is_past_training': is_past_training,
-            'is_within_threshold': is_within_threshold,
-            'status': status,
-        })
+            is_past_training = training_datetime < current_time
+            is_within_threshold = training_datetime - timedelta(hours=APPROVAL_THRESHOLD_HOURS) < current_time
 
-    logger.info("Pending Training Sessions for Approval:")
-    for pending_training in pending_training_sessions:
-        logger.info(
-            f"Training: {pending_training.training_programme.title}, Date: {pending_training.date}, "
-            f"From Time: {pending_training.from_time}, To Time: {pending_training.to_time}, "
-            f"Finalized: {pending_training.finalized}"
-        )
+            # Check if the training session has been explicitly approved by the head
+            approved_by_head = TrainingApproval.objects.filter(training_session=training, head=user, approved=True).exists()
+
+            # Determine the correct status
+            status = "Approved" if approved_by_head else ("Pending" if not is_past_training else "Not Approved")
+
+            logger.info(
+                f"Training: {training.training_programme.title if training.training_programme else training.custom_training_programme}, "
+                f"Date: {training.date}, From Time: {training.from_time}, To Time: {training.to_time}, "
+                f"Finalized: {training.finalized}, Is Past Training: {is_past_training}, "
+                f"Is Within Threshold: {is_within_threshold}, Status: {status}, Approved by Head: {approved_by_head}, "
+                f"IT Participants Count: {it_participants.count()}"
+            )
+
+            training_info.append({
+                'training': training,
+                'show_confirm_button': not training.finalized and not is_past_training and not is_within_threshold and not approved_by_head,
+                'allow_modification': not training.finalized and not is_past_training and not is_within_threshold,
+                'status': status,
+            })
+
+    logger.info("Training info to be displayed:")
+    for info in training_info:
+        logger.info(f"Training ID: {info['training'].id}, Status: {info['status']}")
 
     if request.method == 'POST':
         training_id = request.POST.get('training_id')
@@ -1101,14 +1094,8 @@ def list_and_finalize_trainings(request):
                 removed_users_ids = request.POST.getlist('removed_users')
                 removal_reasons = {user_id: request.POST.get(f'reason_{user_id}') for user_id in removed_users_ids}
 
-                logger.info(f"Nominated Employees: {nominated_employees}")
-                logger.info(f"Nominated Associates: {nominated_associates}")
-                logger.info(f"Removed Users: {removed_users_ids}")
-                logger.info(f"Removal Reasons: {removal_reasons}")
-
                 if action == 'save_changes':
-                    training.selected_participants.set(list(nominated_employees) + list(nominated_associates))
-
+                    # Save changes in the TrainingApproval model
                     try:
                         approval, created = TrainingApproval.objects.get_or_create(
                             training_session=training,
@@ -1126,7 +1113,9 @@ def list_and_finalize_trainings(request):
                             approval.comment = request.POST.get('comment', '')
                             approval.pending_approval = True
                             approval.save()
-                        approval.selected_participants.set(training.selected_participants.filter(user_departments__in=departments))
+
+                        # Add participants to the approval
+                        approval.selected_participants.set(list(nominated_employees) + list(nominated_associates))
                         approval.removed_participants.set(CustomUser.objects.filter(id__in=removed_users_ids))
 
                         logger.info(f"Changes saved for Training Session ID: {training_id}")
@@ -1145,7 +1134,9 @@ def list_and_finalize_trainings(request):
                             head=user,
                             pending_approval=True
                         )
+                        # Update the TrainingSession model
                         training.finalized = True
+                        training.selected_participants.set(approval.selected_participants.all())
                         training.save()
 
                         approval.approved = True
@@ -1175,15 +1166,14 @@ def list_and_finalize_trainings(request):
             return JsonResponse({'success': False, 'error': form.errors})
 
     else:
-        form = ParticipantsForm(user=user)  # Initialize the form without training
+        form = ParticipantsForm(user=user, training=None)  # Initialize the form without training
 
     return render(request, 'list_and_finalize_trainings.html', {
         'training_info': training_info,
         'form': form,
         'current_time': current_time,
-        'approval_threshold_hours': approval_threshold_hours,
+        'approval_threshold_hours': APPROVAL_THRESHOLD_HOURS,
     })
-
 @login_required
 def get_department_participants(request, training_id):
     try:
@@ -1210,7 +1200,6 @@ def get_department_participants(request, training_id):
     except Exception as e:
         logger.error(f"Error in get_department_participants: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @login_required
 def edit_training(request, pk):
