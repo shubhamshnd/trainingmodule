@@ -184,7 +184,7 @@ class RequestTraining(models.Model):
     is_rejected = models.BooleanField(default=False)
     is_approved = models.BooleanField(default=False)
     current_approver = models.ForeignKey(CustomUser, null=True, blank=True, on_delete=models.SET_NULL, related_name='current_requests')
-    
+    # add checker approval timestamp and checker comment
     def __str__(self):
         return f"Request by {self.custom_user.username} for {self.training_programme if self.training_programme else self.other_training}"
 
@@ -244,6 +244,8 @@ class TrainingSession(models.Model):
     online_training_file = models.FileField(upload_to='online_training_files/', blank=True, null=True)
     deadline_to_complete = models.DateField(null=True, blank=True)
     selected_participants = models.ManyToManyField(CustomUser, related_name='selected_trainings', blank=True)
+    finalized = models.BooleanField(default=False)  # Indicates if the training session is finalized
+    approvals = models.ManyToManyField('TrainingApproval', related_name='training_sessions', blank=True)
 
     def mark_as_completed(self):
         attendees = AttendanceMaster.objects.filter(training_session=self).values_list('custom_user', flat=True)
@@ -257,6 +259,21 @@ class TrainingSession(models.Model):
 
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"
+
+class TrainingApproval(models.Model):
+    training_session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE)
+    head = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    selected_participants = models.ManyToManyField(CustomUser, related_name='approved_trainings', blank=True)
+    removed_participants = models.ManyToManyField(CustomUser, related_name='removed_trainings', blank=True)
+    removal_reasons = models.JSONField(default=dict, blank=True)
+    approved = models.BooleanField(default=False)
+    approval_timestamp = models.DateTimeField(null=True, blank=True)
+    comment = models.TextField(blank=True, null=True)
+    pending_approval = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Approval for {self.training_session} by {self.head} for {self.department}"
 
 class AttendanceMaster(models.Model):
     custom_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
@@ -282,7 +299,7 @@ class SuperiorAssignedTraining(models.Model):
     status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True)
     def __str__(self):
         return f"{self.assigned_by} - {self.department}"
-
+    # add checker approval timestamp and checker comment
     class Meta:
         get_latest_by = 'created_at'
 
@@ -305,3 +322,5 @@ class Approval(models.Model):
     
     class Meta:
         get_latest_by = 'approval_timestamp'
+
+

@@ -1,5 +1,5 @@
 from django import forms
-from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining
+from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining , TrainingApproval
 from django.contrib.admin.widgets import FilteredSelectMultiple
 import logging
 
@@ -190,7 +190,11 @@ class TrainingCreationForm(forms.ModelForm):
 
     class Meta:
         model = TrainingSession
-        fields = ['training_programme', 'custom_training_programme', 'venue_type', 'venue', 'trainer_type', 'internal_trainer', 'date', 'from_time', 'to_time', 'online_training_link', 'online_training_file']
+        fields = [
+            'training_programme', 'custom_training_programme', 'venue_type', 
+            'venue', 'trainer_type', 'internal_trainer', 'date', 
+            'from_time', 'to_time', 'online_training_link', 'online_training_file'
+        ]
         labels = {
             'training_programme': 'Training Programme',
             'venue_type': 'Venue Type',
@@ -212,7 +216,7 @@ class TrainingCreationForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super(TrainingCreationForm, self).__init__(*args, **kwargs)
         self.fields['internal_trainer'].queryset = CustomUser.objects.filter(
-            card_validity__year__gt=2045
+            work_order_no=''
         ).order_by('employee_name')
         self.fields['internal_trainer'].label_from_instance = self.label_from_instance
 
@@ -245,7 +249,6 @@ class TrainingCreationForm(forms.ModelForm):
             self.fields['internal_trainer'].required = False
             self.fields['trainer_type'].required = False
         return cleaned_data
-
 
 class ExternalTrainerForm(forms.ModelForm):
     existing_trainer = forms.ModelChoiceField(
@@ -377,3 +380,55 @@ class DepartmentAdminForm(forms.ModelForm):
                 member.save()
 
         return instance
+    
+    
+
+class TrainingApprovalForm(forms.ModelForm):
+    class Meta:
+        model = TrainingApproval
+        fields = ['comment']
+
+class ReasonForm(forms.Form):
+    reason = forms.CharField(widget=forms.Textarea, required=True)
+    
+    
+
+class ParticipantsForm(forms.Form):
+    available_employees = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Available Employees", is_stacked=False),
+        required=False
+    )
+    available_associates = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Available Associates", is_stacked=False),
+        required=False
+    )
+    nominated_employees = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Nominated Employees", is_stacked=False),
+        required=False
+    )
+    nominated_associates = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Nominated Associates", is_stacked=False),
+        required=False
+    )
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        training = kwargs.pop('training', None)
+        super().__init__(*args, **kwargs)
+        
+        if user:
+            departments = Department.objects.filter(head=user)
+            if training:
+                self.fields['available_employees'].queryset = CustomUser.objects.filter(user_departments__in=departments).distinct().exclude(id__in=training.selected_participants.all())
+                self.fields['available_associates'].queryset = CustomUser.objects.filter(associated_departments__in=departments).distinct().exclude(id__in=training.selected_participants.all())
+                self.fields['nominated_employees'].queryset = CustomUser.objects.filter(id__in=training.selected_participants.all(), user_departments__in=departments).distinct()
+                self.fields['nominated_associates'].queryset = CustomUser.objects.filter(id__in=training.selected_participants.all(), associated_departments__in=departments).distinct()
+            else:
+                self.fields['available_employees'].queryset = CustomUser.objects.filter(user_departments__in=departments).distinct()
+                self.fields['available_associates'].queryset = CustomUser.objects.filter(associated_departments__in=departments).distinct()
+                self.fields['nominated_employees'].queryset = CustomUser.objects.none()
+                self.fields['nominated_associates'].queryset = CustomUser.objects.none()

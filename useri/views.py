@@ -3,10 +3,10 @@ from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme
+from .models import CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme , TrainingApproval
 from django.views.decorators.csrf import csrf_protect
 from django.http import HttpResponse
-from .forms import RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm , SuperiorAssignmentForm
+from .forms import RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm , SuperiorAssignmentForm , TrainingApprovalForm, ReasonForm , ParticipantsForm
 import logging
 from django.utils import timezone
 from itertools import chain
@@ -14,8 +14,11 @@ from collections import defaultdict
 from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
 from django.db.models import Q , F , Max
-from datetime import timedelta
+from django.utils import timezone
+from datetime import timedelta, datetime
 from django.http import JsonResponse
+
+import pytz
 def easter_egg_page(request):
     context = {
         'range_170': range(170),
@@ -46,6 +49,9 @@ def home(request):
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
     return response
+
+
+
 def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -863,7 +869,6 @@ def create_training(request):
                             'trainer_type': 'Internal',
                             'name': internal_trainer.employee_name,
                             'email': internal_trainer.email,
-                            'phone_number': internal_trainer.contact_no,
                         }
                     )
 
@@ -878,6 +883,15 @@ def create_training(request):
         external_trainer_form = ExternalTrainerForm()
 
     trainings = TrainingSession.objects.all().order_by('-created_at')
+
+    for training in trainings:
+        training.mark_as_completed()
+        if training.is_completed:
+            attendance_dates = AttendanceMaster.objects.filter(training_session=training).values_list('attendance_date', flat=True)
+            training.completion_date = max(attendance_dates) if attendance_dates else None
+        else:
+            training.completion_date = None
+
     venues = list(VenueMaster.objects.values('id', 'name', 'venue_type'))
     trainers = list(TrainerMaster.objects.filter(trainer_type='External').values('id', 'name', 'email', 'phone_number', 'city'))
 
@@ -888,6 +902,8 @@ def create_training(request):
         'venues': venues,
         'trainers': trainers,
     })
+
+    
 @login_required
 def send_training_request(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)
@@ -900,12 +916,13 @@ def send_training_request(request, pk):
             selected_users_ids = request.POST.getlist('selected_users')
             selected_users = CustomUser.objects.filter(id__in=selected_users_ids)
             training.selected_participants.set(selected_users)
+            if 'finalize' in request.POST:
+                training.finalized = True  # Mark the training as finalized
             training.save()
             training.mark_as_completed()
-            messages.success(request, "Training session details and participants updated successfully.")
-            return redirect('create_training')
+            return JsonResponse({'success': True})  # Return success response for AJAX
         else:
-            messages.error(request, "There was an error updating the training session. Please check the form for errors.")
+            return JsonResponse({'success': False, 'errors': form.errors})  # Return errors for AJAX
     else:
         form = TrainingRequestForm(instance=training)
 
@@ -939,8 +956,34 @@ def get_department_details(request):
     employees = department.members.all()
     head = department.head
 
-    associates_data = [{'id': assoc.id, 'employee_name': assoc.employee_name, 'username': assoc.username, 'selected': assoc.id in training.selected_participants.all()} for assoc in associates]
-    employees_data = [{'id': emp.id, 'employee_name': emp.employee_name, 'username': emp.username, 'selected': emp.id in training.selected_participants.all()} for emp in employees]
+    current_date = timezone.now().date()
+
+    def check_validity(user, programme):
+        attendance = AttendanceMaster.objects.filter(custom_user=user, training_session__training_programme=programme).order_by('-attendance_date').first()
+        if attendance:
+            validity_end_date = attendance.attendance_date + timedelta(days=365 * programme.validity)
+            days_left = (validity_end_date - current_date).days
+            if days_left > 0:
+                return days_left, validity_end_date
+        return 0, current_date
+
+    def get_user_data(user):
+        days_left, validity_end_date = check_validity(user, training.training_programme) if training.training_programme else (0, current_date)
+        status = 'success' if days_left > 30 else 'warning' if days_left > 0 else 'not_trained'
+        show_checkbox = days_left <= 30
+        return {
+            'id': user.id,
+            'employee_name': user.employee_name,
+            'username': user.username,
+            'contractor_name': user.contractor_name,
+            'selected': user.id in training.selected_participants.all(),
+            'status': status,
+            'show_checkbox': show_checkbox,
+            'validity_end_date': validity_end_date.strftime('%Y-%m-%d')
+        }
+
+    associates_data = [get_user_data(assoc) for assoc in associates]
+    employees_data = [get_user_data(emp) for emp in employees]
     head_data = {'employee_name': head.employee_name, 'username': head.username} if head else {}
 
     return JsonResponse({
@@ -950,6 +993,224 @@ def get_department_details(request):
             'employees': employees_data,
         }
     })
+    
+@login_required
+def get_training_selected_users(request, pk):
+    training = get_object_or_404(TrainingSession, pk=pk)
+    selected_users = training.selected_participants.all()
+    
+    selected_users_data = [
+        {
+            'id': user.id,
+            'employee_name': user.employee_name,
+            'username': user.username,
+            'contractor_name': user.contractor_name,
+            'type': 'associate' if Department.objects.filter(associates__id=user.id).exists() else 'member'
+        }
+        for user in selected_users
+    ]
+    
+    return JsonResponse({
+        'selected_users': selected_users_data
+    })
+    
+
+APPROVAL_THRESHOLD_HOURS = 48
+
+@login_required
+def list_and_finalize_trainings(request):
+    user = request.user
+    departments = Department.objects.filter(head=user)
+    approval_threshold_hours = 48
+
+    if not departments.exists():
+        logger.info(f"User {user.username} is not head of any departments.")
+        return render(request, 'list_and_finalize_trainings.html', {
+            'training_sessions': [],
+        })
+
+    logger.info(f"User {user.username} is head of the following departments: {[dept.name for dept in departments]}")
+
+    training_sessions = TrainingSession.objects.filter(
+        selected_participants__user_departments__in=departments
+    ).distinct().order_by('-date', '-from_time')
+
+    current_time = timezone.now()
+    logger.info(f"Current time: {current_time}")
+    training_info = []
+
+    pending_training_sessions = []
+
+    for training in training_sessions:
+        training_datetime = datetime.combine(training.date, training.from_time)
+        if training_datetime.tzinfo is None:
+            training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
+        
+        is_past_training = training_datetime < current_time
+        is_within_threshold = training_datetime - timedelta(hours=approval_threshold_hours) < current_time
+        
+        # Check if the training session has been approved by the head
+        approved_by_head = TrainingApproval.objects.filter(training_session=training, head=user, approved=True).exists()
+        
+        show_confirm_button = not training.finalized and not is_past_training and not is_within_threshold and not approved_by_head
+        allow_modification = not training.finalized and not is_past_training and not is_within_threshold
+        status = "Approved" if is_past_training or (training.finalized and is_within_threshold) or approved_by_head else "Pending"
+
+        logger.info(
+            f"Training: {training.training_programme.title}, Date: {training.date}, "
+            f"From Time: {training.from_time}, To Time: {training.to_time}, "
+            f"Finalized: {training.finalized}, Is Past Training: {is_past_training}, "
+            f"Is Within Threshold: {is_within_threshold}, Show Confirm Button: {show_confirm_button}, "
+            f"Allow Modification: {allow_modification}, Status: {status}, Approved by Head: {approved_by_head}"
+        )
+
+        if status == "Pending":
+            pending_training_sessions.append(training)
+
+        training_info.append({
+            'training': training,
+            'show_confirm_button': show_confirm_button,
+            'allow_modification': allow_modification,
+            'is_past_training': is_past_training,
+            'is_within_threshold': is_within_threshold,
+            'status': status,
+        })
+
+    logger.info("Pending Training Sessions for Approval:")
+    for pending_training in pending_training_sessions:
+        logger.info(
+            f"Training: {pending_training.training_programme.title}, Date: {pending_training.date}, "
+            f"From Time: {pending_training.from_time}, To Time: {pending_training.to_time}, "
+            f"Finalized: {pending_training.finalized}"
+        )
+
+    if request.method == 'POST':
+        training_id = request.POST.get('training_id')
+        action = request.POST.get('action')
+
+        training = get_object_or_404(TrainingSession, pk=training_id)
+        form = ParticipantsForm(request.POST, user=user, training=training)
+
+        logger.info(f"Received POST request for training ID: {training_id} with action: {action}")
+        logger.info(f"Form data: {request.POST}")
+
+        if form.is_valid():
+            try:
+                nominated_employees = form.cleaned_data['nominated_employees']
+                nominated_associates = form.cleaned_data['nominated_associates']
+                removed_users_ids = request.POST.getlist('removed_users')
+                removal_reasons = {user_id: request.POST.get(f'reason_{user_id}') for user_id in removed_users_ids}
+
+                logger.info(f"Nominated Employees: {nominated_employees}")
+                logger.info(f"Nominated Associates: {nominated_associates}")
+                logger.info(f"Removed Users: {removed_users_ids}")
+                logger.info(f"Removal Reasons: {removal_reasons}")
+
+                if action == 'save_changes':
+                    training.selected_participants.set(list(nominated_employees) + list(nominated_associates))
+
+                    try:
+                        approval, created = TrainingApproval.objects.get_or_create(
+                            training_session=training,
+                            head=user,
+                            defaults={
+                                'department': departments.first(),
+                                'approved': False,
+                                'removal_reasons': removal_reasons,
+                                'comment': request.POST.get('comment', ''),
+                                'pending_approval': True,
+                            }
+                        )
+                        if not created:
+                            approval.removal_reasons = removal_reasons
+                            approval.comment = request.POST.get('comment', '')
+                            approval.pending_approval = True
+                            approval.save()
+                        approval.selected_participants.set(training.selected_participants.filter(user_departments__in=departments))
+                        approval.removed_participants.set(CustomUser.objects.filter(id__in=removed_users_ids))
+
+                        logger.info(f"Changes saved for Training Session ID: {training_id}")
+                        logger.info(f"Selected Participants: {list(approval.selected_participants.values_list('employee_name', flat=True))}")
+                        logger.info(f"Removed Participants: {list(approval.removed_participants.values_list('employee_name', flat=True))}")
+
+                        return JsonResponse({'success': True})
+                    except Exception as e:
+                        logger.error(f"Error creating or updating TrainingApproval for Training Session ID: {training_id}: {str(e)}")
+                        return JsonResponse({'success': False, 'error': str(e)})
+
+                elif action == 'confirm_training':
+                    try:
+                        approval = TrainingApproval.objects.get(
+                            training_session=training,
+                            head=user,
+                            pending_approval=True
+                        )
+                        training.finalized = True
+                        training.save()
+
+                        approval.approved = True
+                        approval.pending_approval = False
+                        approval.approval_timestamp = timezone.now()
+                        approval.save()
+
+                        logger.info(f"Training Session ID: {training_id} confirmed by {user.username}")
+                        logger.info(f"Selected Participants: {list(approval.selected_participants.values_list('employee_name', flat=True))}")
+                        logger.info(f"Removed Participants: {list(approval.removed_participants.values_list('employee_name', flat=True))}")
+
+                        return JsonResponse({'success': True})
+
+                    except TrainingApproval.DoesNotExist:
+                        logger.error(f"No pending TrainingApproval found for Training Session ID: {training_id}")
+                        return JsonResponse({'success': False, 'error': 'No pending approval found'})
+
+                    except Exception as e:
+                        logger.error(f"Error confirming TrainingApproval for Training Session ID: {training_id}: {str(e)}")
+                        return JsonResponse({'success': False, 'error': str(e)})
+
+            except Exception as e:
+                logger.error(f"Error processing request for Training Session ID: {training_id}: {str(e)}")
+                return JsonResponse({'success': False, 'error': str(e)})
+        else:
+            logger.error(f"Form validation failed for Training Session ID: {training_id}: {form.errors}")
+            return JsonResponse({'success': False, 'error': form.errors})
+
+    else:
+        form = ParticipantsForm(user=user)  # Initialize the form without training
+
+    return render(request, 'list_and_finalize_trainings.html', {
+        'training_info': training_info,
+        'form': form,
+        'current_time': current_time,
+        'approval_threshold_hours': approval_threshold_hours,
+    })
+
+@login_required
+def get_department_participants(request, training_id):
+    try:
+        training = get_object_or_404(TrainingSession, pk=training_id)
+        user = request.user
+        departments = Department.objects.filter(head=user)
+
+        available_employees = CustomUser.objects.filter(user_departments__in=departments).distinct().exclude(id__in=training.selected_participants.all())
+        selected_employees = CustomUser.objects.filter(id__in=training.selected_participants.all(), user_departments__in=departments).distinct()
+        available_associates = CustomUser.objects.filter(associated_departments__in=departments).distinct().exclude(id__in=training.selected_participants.all())
+        selected_associates = CustomUser.objects.filter(id__in=training.selected_participants.all(), associated_departments__in=departments).distinct()
+
+        participants = []
+        for user in available_employees:
+            participants.append({'id': user.id, 'employee_name': user.employee_name, 'username': user.username, 'type': 'employee', 'selected': False})
+        for user in selected_employees:
+            participants.append({'id': user.id, 'employee_name': user.employee_name, 'username': user.username, 'type': 'employee', 'selected': True})
+        for user in available_associates:
+            participants.append({'id': user.id, 'employee_name': user.employee_name, 'username': user.username, 'type': 'associate', 'selected': False})
+        for user in selected_associates:
+            participants.append({'id': user.id, 'employee_name': user.employee_name, 'username': user.username, 'type': 'associate', 'selected': True})
+
+        return JsonResponse({'participants': participants})
+    except Exception as e:
+        logger.error(f"Error in get_department_participants: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
 
 @login_required
 def edit_training(request, pk):

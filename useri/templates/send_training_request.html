@@ -4,6 +4,28 @@
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-3">
+      <h2>Departments</h2>
+      <select class="form-select" id="department-select" style="margin-bottom: 20px;">
+        <option value="" selected disabled>Select a Department</option>
+        {% for department in departments %}
+        <option value="{{ department.id }}">{{ department.name }}</option>
+        {% endfor %}
+      </select>
+      <div id="selected-people-box" style="height: 75vh; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
+        <h4>Selected People</h4>
+        <div id="selected-associates"></div>
+        <div id="selected-members"></div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <h2>Department Details</h2>
+      <div id="department-details" class="no-horizontal-scroll" style="height: 75vh; overflow-y: auto;">
+        <!-- Department details will be populated here -->
+      </div>
+    </div>
+
+    <div class="col-md-3">
       <h2>Training Details</h2>
       <div class="mb-3">
         <strong>Training Name:</strong> 
@@ -30,7 +52,7 @@
         {% endif %}
       </div>
       <h2>Set Training Date and Time</h2>
-      <form method="post">
+      <form method="post" id="training-form">
         {% csrf_token %}
         {% if venue_type != 'Online' %}
         <div class="mb-3" id="date-field">
@@ -47,58 +69,138 @@
           {{ form.deadline_to_complete.label_tag }} {{ form.deadline_to_complete }}
         </div>
         {% endif %}
-        <button type="submit" class="btn btn-primary">Save</button>
+        <div id="hidden-selected-users"></div>
+        <button type="submit" class="btn btn-primary" id="save-button" {% if training.finalized %}disabled{% endif %}>Save</button>
         <a href="{% url 'create_training' %}" class="btn btn-secondary">Back</a>
+        {% if not training.finalized %}
+        <button type="button" class="btn btn-success" id="finalize-button">Finish</button>
+        {% endif %}
       </form>
     </div>
+  </div>
+</div>
 
-    <div class="col-md-3">
-      <h2>Departments</h2>
-      <div class="list-group" id="department-list" style="height: 75vh; overflow-y: auto;">
-        {% for department in departments %}
-        <a href="#" class="list-group-item list-group-item-action department-item" data-department-id="{{ department.id }}">
-          {{ department.name }}
-        </a>
-        {% endfor %}
+<!-- Modal for Final Confirmation -->
+<div class="modal fade" id="finalizeModal" tabindex="-1" aria-labelledby="finalizeModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="finalizeModalLabel">Finalize Training</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-    </div>
-
-    <div class="col-md-6">
-      <h2>Department Details</h2>
-      <div id="department-details" style="height: 75vh; overflow-y: auto;">
-        <!-- Department details will be populated here -->
+      <div class="modal-body">
+        Are you sure you want to finalize this training session? This action cannot be undone.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="confirm-finalize-button">Save and Confirm</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Loader Animation and Backdrop -->
+<div id="loader-backdrop" class="d-none">
+  <div class="loader"></div>
+</div>
+
 <style>
-  .selected-users-list {
-    max-height: 85vh;
+  .user-table {
+    max-height: 350px;
     overflow-y: auto;
     border: 1px solid #ddd;
-    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .user-checkbox {
+    transform: scale(1.5);
+    margin-right: 10px;
+  }
+
+  .no-horizontal-scroll {
+    overflow-x: hidden;
+  }
+
+  .user-status-success {
+    background-color: #d4edda;
+  }
+
+  #selected-people-box ul li {
+    font-size: 12px;
+  }
+
+  #loader-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1050;
+  }
+
+  .loader {
+    border: 8px solid #f3f3f3;
+    border-top: 8px solid #3498db;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 </style>
 
+<!-- Include jQuery and Bootstrap JS -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
 
 <script>
   $(document).ready(function() {
-    function updateSelectedUsersList() {
-      const selectedUsers = $('.user-checkbox:checked');
-      const selectedUsersList = $('#selected-users-list');
-      const totalSelected = $('#total-selected');
-      selectedUsersList.empty();
-      let totalCount = 0;
+    let selectedUsers = [];
 
-      selectedUsers.each(function() {
-        const userName = $(this).data('name');
-        const userId = $(this).data('id');
-        selectedUsersList.append(`<div>${userName} (ID: ${userId})</div>`);
-        totalCount++;
+    function updateSelectedUsersList() {
+      const selectedAssociates = $('#selected-associates');
+      const selectedMembers = $('#selected-members');
+      const hiddenSelectedUsers = $('#hidden-selected-users');
+      selectedAssociates.empty();
+      selectedMembers.empty();
+      hiddenSelectedUsers.empty();
+
+      let associatesHtml = '<h5>Associates</h5><ul class="list-group user-table">';
+      let membersHtml = '<h5>Members</h5><ul class="list-group user-table">';
+
+      selectedUsers.forEach(user => {
+        const listItem = `<li class="list-group-item">${user.employee_name} - ${user.username} - ${user.contractor_name} (ID: ${user.id})</li>`;
+        const hiddenInput = `<input type="hidden" name="selected_users" value="${user.id}">`;
+        if (user.type === 'associate') {
+          associatesHtml += listItem;
+        } else {
+          membersHtml += listItem;
+        }
+        hiddenSelectedUsers.append(hiddenInput);
       });
 
-      totalSelected.text(totalCount);
+      associatesHtml += '</ul>';
+      membersHtml += '</ul>';
+
+      selectedAssociates.html(associatesHtml);
+      selectedMembers.html(membersHtml);
+    }
+
+    function filterList(inputId, listId) {
+      $(`#${inputId}`).on('keyup', function() {
+        const value = $(this).val().toLowerCase();
+        $(`#${listId} li`).filter(function() {
+          $(this).toggle($(this).find('.searchable-text').text().toLowerCase().indexOf(value) > -1);
+        });
+      });
     }
 
     function loadDepartmentDetails(departmentId) {
@@ -117,40 +219,68 @@
           const employees = department.employees;
 
           let detailsHtml = `
-            <h4>Department Head: ${head.employee_name} (${head.username})</h4>
-            <h4>Associates</h4>
-            <input type="checkbox" id="select-all-associates"> Select All
-            <ul class="list-group">
+            <h5>Department Head: ${head.employee_name} (${head.username})</h5>
+            <div class="row">
+              <div class="col-md-6">
+                <h5>Associates</h5>
+                <input type="text" id="associate-search" placeholder="Search associates" class="form-control mb-2">
+                <input type="checkbox" id="select-all-associates"> Select All
+                <ul class="list-group user-table" id="associate-list">
           `;
-          associates.forEach(associate => {
+
+          let associatesSorted = associates.sort((a, b) => (a.status === 'success') - (b.status === 'success') || (a.employee_name > b.employee_name ? 1 : -1));
+          associatesSorted.forEach(associate => {
+            const isChecked = selectedUsers.some(user => user.id === associate.id) ? 'checked' : '';
+            const statusClass = associate.status === 'success' ? 'user-status-success' : '';
+            const checkbox = associate.show_checkbox ? `<input type="checkbox" class="associate-checkbox user-checkbox" data-id="${associate.id}" data-name="${associate.employee_name}" data-username="${associate.username}" data-contractor-name="${associate.contractor_name}" ${isChecked}>` : '';
+            const validityText = associate.status === 'success' || associate.status === 'warning' ? `(Valid until: ${associate.validity_end_date})` : '';
             detailsHtml += `
-              <li class="list-group-item">
-                <input type="checkbox" class="associate-checkbox user-checkbox" data-id="${associate.id}" data-name="${associate.employee_name}" ${associate.selected ? 'checked' : ''}>
-                ${associate.employee_name} - ${associate.username}
+              <li class="list-group-item ${statusClass}">
+                ${checkbox} <span class="searchable-text">${associate.employee_name} - ${associate.username} - ${associate.contractor_name}</span> ${validityText}
               </li>
             `;
           });
-          detailsHtml += `</ul><h4>Employees</h4><input type="checkbox" id="select-all-employees"> Select All<ul class="list-group">`;
-          employees.forEach(employee => {
+          detailsHtml += `</ul></div><div class="col-md-6"><h5>Employees</h5><input type="text" id="employee-search" placeholder="Search employees" class="form-control mb-2"><input type="checkbox" id="select-all-employees"> Select All<ul class="list-group user-table" id="employee-list">`;
+
+          let employeesSorted = employees.sort((a, b) => (a.status === 'success') - (b.status === 'success') || (a.employee_name > b.employee_name ? 1 : -1));
+          employeesSorted.forEach(employee => {
+            const isChecked = selectedUsers.some(user => user.id === employee.id) ? 'checked' : '';
+            const statusClass = employee.status === 'success' ? 'user-status-success' : '';
+            const checkbox = employee.show_checkbox ? `<input type="checkbox" class="employee-checkbox user-checkbox" data-id="${employee.id}" data-name="${employee.employee_name}" data-username="${employee.username}" ${isChecked}>` : '';
+            const validityText = employee.status === 'success' || employee.status === 'warning' ? `(Valid until: ${employee.validity_end_date})` : '';
             detailsHtml += `
-              <li class="list-group-item">
-                <input type="checkbox" class="employee-checkbox user-checkbox" data-id="${employee.id}" data-name="${employee.employee_name}" ${employee.selected ? 'checked' : ''}>
-                ${employee.employee_name} (${employee.username})
+              <li class="list-group-item ${statusClass}">
+                ${checkbox} <span class="searchable-text">${employee.employee_name} (${employee.username})</span> ${validityText}
               </li>
             `;
           });
-          detailsHtml += '</ul>';
+          detailsHtml += '</ul></div></div>';
 
           $('#department-details').html(detailsHtml);
-          $('.user-checkbox').change(updateSelectedUsersList);
-          $('#select-all-associates').change(function() {
-            $('.associate-checkbox').prop('checked', this.checked);
+          filterList('associate-search', 'associate-list');
+          filterList('employee-search', 'employee-list');
+          $('.user-checkbox').change(function() {
+            const userId = $(this).data('id');
+            const userName = $(this).data('name');
+            const userUsername = $(this).data('username');
+            const userContractorName = $(this).data('contractor-name');
+            const userType = $(this).hasClass('associate-checkbox') ? 'associate' : 'member';
+            if ($(this).is(':checked')) {
+              selectedUsers.push({ id: userId, employee_name: userName, username: userUsername, contractor_name: userContractorName, type: userType });
+            } else {
+              selectedUsers = selectedUsers.filter(user => user.id !== userId);
+            }
             updateSelectedUsersList();
+          });
+          $('#select-all-associates').change(function() {
+            $('.associate-checkbox').prop('checked', this.checked).trigger('change');
           });
           $('#select-all-employees').change(function() {
-            $('.employee-checkbox').prop('checked', this.checked);
-            updateSelectedUsersList();
+            $('.employee-checkbox').prop('checked', this.checked).trigger('change');
           });
+
+          // Ensure previously selected users are displayed correctly
+          updateSelectedUsersList();
         },
         error: function() {
           $('#department-details').html('<p>Error loading department details.</p>');
@@ -158,13 +288,90 @@
       });
     }
 
-    $('.department-item').click(function(e) {
-      e.preventDefault();
-      const departmentId = $(this).data('department-id');
+    function initializeSelectedUsers() {
+      const trainingId = '{{ training.id }}';
+      $.ajax({
+        url: `{% url 'get_training_selected_users' training.id %}`,
+        method: 'GET',
+        success: function(data) {
+          selectedUsers = data.selected_users.map(user => ({
+            id: user.id,
+            employee_name: user.employee_name,
+            username: user.username,
+            contractor_name: user.contractor_name,
+            type: user.type
+          }));
+          updateSelectedUsersList();
+
+          // If a department is already selected, reload its details
+          const departmentId = $('#department-select').val();
+          if (departmentId) {
+            loadDepartmentDetails(departmentId);
+          }
+        },
+        error: function() {
+          console.error('Error loading selected users.');
+        }
+      });
+    }
+
+    $('#department-select').change(function(e) {
+      const departmentId = $(this).val();
+      console.log("Department ID selected:", departmentId);  // Debugging
       loadDepartmentDetails(departmentId);
     });
 
-    updateSelectedUsersList(); // Initial call to populate selected users list
+    $('#finalize-button').click(function() {
+      const dateField = $('input[name="date"]');
+      const fromTimeField = $('input[name="from_time"]');
+      const toTimeField = $('input[name="to_time"]');
+      const selectedUserIds = selectedUsers.map(user => user.id);
+
+      if (!dateField.val() || !fromTimeField.val() || !toTimeField.val() || selectedUserIds.length === 0) {
+        alert('Please fill in the date, time fields and select participants before finalizing.');
+      } else {
+        $('#finalizeModal').modal('show');
+      }
+    });
+
+    $('#confirm-finalize-button').click(function() {
+      $('#loader-backdrop').removeClass('d-none');
+      $('#training-form').append('<input type="hidden" name="finalize" value="true">');
+      $.ajax({
+        url: $('#training-form').attr('action'),
+        method: 'POST',
+        data: $('#training-form').serialize(),
+        success: function(data) {
+          $('#loader-backdrop').addClass('d-none');
+          window.location.reload();
+        },
+        error: function() {
+          $('#loader-backdrop').addClass('d-none');
+          alert('There was an error finalizing the training.');
+        }
+      });
+    });
+
+    $('#training-form').on('submit', function(event) {
+      event.preventDefault();
+      $('#loader-backdrop').removeClass('d-none');
+      $.ajax({
+        url: $(this).attr('action'),
+        method: 'POST',
+        data: $(this).serialize(),
+        success: function(data) {
+          $('#loader-backdrop').addClass('d-none');
+          window.location.reload();
+        },
+        error: function() {
+          $('#loader-backdrop').addClass('d-none');
+          alert('There was an error saving the training session.');
+        }
+      });
+    });
+
+    // Initialize selected users when the page loads
+    initializeSelectedUsers();
   });
 </script>
 {% endblock %}

@@ -100,9 +100,9 @@
               </td>
               <td>
                 {% if training.is_completed %}
-                  Completed
+                  Completed on {{ training.completion_date }}
                 {% else %}
-                  <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Select Participants and Schedule</a>
+                  <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Schedule</a>
                 {% endif %}
               </td>              
             </tr>

@@ -29,4 +29,8 @@ urlpatterns = [
     path('modify/<int:pk>/', views.edit_training, name='modify_training'),
     path('send_training_request/<int:pk>/', views.send_training_request, name='send_training_request'),
     path('get-department-details/', views.get_department_details, name='get_department_details'),
+    path('get_training_selected_users/<int:pk>/', views.get_training_selected_users, name='get_training_selected_users'),
+    path('list_and_finalize_trainings/', views.list_and_finalize_trainings, name='list_and_finalize_trainings'),
+    path('get_department_participants/<int:training_id>/', views.get_department_participants, name='get_department_participants'),
+
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
