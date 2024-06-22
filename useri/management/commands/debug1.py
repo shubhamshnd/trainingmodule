@@ -1,82 +1,80 @@
 import logging
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from useri.models import TrainingSession, TrainingApproval, CustomUser, Department
-from datetime import timedelta, datetime
+from useri.models import TrainingSession, TrainingApproval, CustomUser
 from django.db.models import Q , F , Max
+from datetime import timedelta, datetime
 
 logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
-    help = 'Log training sessions and their statuses'
+    help = 'List all trainings for the head and their departments\' members and associates'
 
     def add_arguments(self, parser):
-        parser.add_argument('--head_id', type=int, help='ID of the head user')
+        parser.add_argument('head_id', type=int, help='The ID of the head to list trainings for')
 
     def handle(self, *args, **kwargs):
-        head_id = kwargs.get('head_id')
-        if not head_id:
-            self.stderr.write(self.style.ERROR('Head ID is required'))
-            return
-
+        head_id = kwargs['head_id']
         try:
-            head_user = CustomUser.objects.get(pk=head_id)
+            head = CustomUser.objects.get(id=head_id)
         except CustomUser.DoesNotExist:
-            self.stderr.write(self.style.ERROR('Head user does not exist'))
+            self.stdout.write(self.style.ERROR('Head with ID {} does not exist'.format(head_id)))
             return
 
-        departments = Department.objects.filter(head=head_user)
+        departments = head.headed_departments.all()
         if not departments.exists():
-            logger.info(f"User {head_user.username} is not head of any departments.")
-            self.stdout.write(self.style.WARNING(f"User {head_user.username} is not head of any departments."))
+            self.stdout.write(self.style.WARNING('User {} is not head of any departments.'.format(head.username)))
             return
 
-        logger.info(f"User {head_user.username} is head of the following departments: {[dept.name for dept in departments]}")
-
-        training_sessions = TrainingSession.objects.filter(
-            selected_participants__user_departments__in=departments
-        ).distinct().order_by('-date', '-from_time')
+        self.stdout.write(self.style.SUCCESS('User {} is head of the following departments: {}'.format(
+            head.username, [dept.name for dept in departments]
+        )))
 
         current_time = timezone.now()
-        logger.info(f"Current time: {current_time}")
-        
+        training_sessions = TrainingSession.objects.filter(
+            Q(selected_participants__user_departments__in=departments) |
+            Q(trainingapproval__head=head)
+        ).distinct().order_by('-date', '-from_time')
+
+        if not training_sessions.exists():
+            self.stdout.write(self.style.WARNING('No training sessions found for the head and their departments.'))
+            return
+
+        self.stdout.write(self.style.SUCCESS('Listing training sessions:'))
         for training in training_sessions:
+            approval = TrainingApproval.objects.filter(training_session=training, head=head).first()
+            if approval:
+                selected_participants = approval.selected_participants.all()
+                removed_participants = approval.removed_participants.all()
+            else:
+                selected_participants = CustomUser.objects.none()
+                removed_participants = CustomUser.objects.none()
+
+            original_participants = training.selected_participants.filter(
+                Q(user_departments__in=departments) | Q(associated_departments__in=departments)
+            )
+
             training_datetime = datetime.combine(training.date, training.from_time)
             if training_datetime.tzinfo is None:
                 training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
 
             is_past_training = training_datetime < current_time
             is_within_threshold = training_datetime - timedelta(hours=48) < current_time
-
-            approved_by_head = TrainingApproval.objects.filter(training_session=training, head=head_user, approved=True).exists()
-
+            approved_by_head = approval and approval.approved
             status = "Approved" if approved_by_head else ("Pending" if not is_past_training else "Not Approved")
 
-            logger.info(
-                f"Training: {training.training_programme.title if training.training_programme else training.custom_training_programme}, "
-                f"Date: {training.date}, From Time: {training.from_time}, To Time: {training.to_time}, "
-                f"Finalized: {training.finalized}, Is Past Training: {is_past_training}, "
-                f"Is Within Threshold: {is_within_threshold}, Status: {status}, Approved by Head: {approved_by_head}"
-            )
+            self.stdout.write('Training ID: {}'.format(training.id))
+            self.stdout.write('Title: {}'.format(training.training_programme.title if training.training_programme else training.custom_training_programme))
+            self.stdout.write('Date: {}'.format(training.date))
+            self.stdout.write('From Time: {}'.format(training.from_time))
+            self.stdout.write('To Time: {}'.format(training.to_time))
+            self.stdout.write('Finalized: {}'.format(training.finalized))
+            self.stdout.write('Status: {}'.format(status))
+            self.stdout.write('Approved by Head: {}'.format(approved_by_head))
 
-            self.stdout.write(self.style.SUCCESS(
-                f"Training: {training.training_programme.title if training.training_programme else training.custom_training_programme}, "
-                f"Date: {training.date}, From Time: {training.from_time}, To Time: {training.to_time}, "
-                f"Finalized: {training.finalized}, Is Past Training: {is_past_training}, "
-                f"Is Within Threshold: {is_within_threshold}, Status: {status}, Approved by Head: {approved_by_head}"
-            ))
+            self.stdout.write('Original Participants: {}'.format(', '.join([str(user.username) for user in original_participants])))
+            self.stdout.write('Selected Participants in Approval: {}'.format(', '.join([str(user.username) for user in selected_participants])))
+            self.stdout.write('Removed Participants in Approval: {}'.format(', '.join([str(user.username) for user in removed_participants])))
+            self.stdout.write('---')
 
-            available_employees = CustomUser.objects.filter(user_departments__in=departments).distinct().exclude(id__in=training.selected_participants.values_list('id', flat=True))
-            available_associates = CustomUser.objects.filter(associated_departments__in=departments).distinct().exclude(id__in=training.selected_participants.values_list('id', flat=True))
-            nominated_employees = CustomUser.objects.filter(id__in=training.selected_participants.values_list('id', flat=True), user_departments__in=departments).distinct()
-            nominated_associates = CustomUser.objects.filter(id__in=training.selected_participants.values_list('id', flat=True), associated_departments__in=departments).distinct()
-
-            logger.info(f"Available Employees for training {training.id}: {[user.id for user in available_employees]}")
-            logger.info(f"Nominated Employees for training {training.id}: {[user.id for user in nominated_employees]}")
-            logger.info(f"Available Associates for training {training.id}: {[user.id for user in available_associates]}")
-            logger.info(f"Nominated Associates for training {training.id}: {[user.id for user in nominated_associates]}")
-
-            self.stdout.write(self.style.SUCCESS(f"Available Employees for training {training.id}: {[user.id for user in available_employees]}"))
-            self.stdout.write(self.style.SUCCESS(f"Nominated Employees for training {training.id}: {[user.id for user in nominated_employees]}"))
-            self.stdout.write(self.style.SUCCESS(f"Available Associates for training {training.id}: {[user.id for user in available_associates]}"))
-            self.stdout.write(self.style.SUCCESS(f"Nominated Associates for training {training.id}: {[user.id for user in nominated_associates]}"))
+        logger.info("Listed trainings for head ID {}".format(head_id))

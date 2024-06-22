@@ -18,13 +18,13 @@
                     </thead>
                     <tbody id="training-sessions-body">
                         {% for info in training_info %}
-                            <tr data-training-id="{{ info.training.id }}" class="training-row {% if info.status == 'Approved' %}table-success{% endif %}">
-                                <td>{{ info.training.training_programme.title }}</td>
-                                <td>{{ info.training.date }} {{ info.training.from_time }} - {{ info.training.to_time }}</td>
-                                <td>{{ info.training.venue.name }}</td>
-                                <td>{{ info.training.trainer.name }}</td>
-                                <td>{{ info.status }}</td>
-                            </tr>
+                        <tr data-training-id="{{ info.training.id }}" class="training-row {% if info.status == 'Approved' %}table-success{% endif %}">
+                            <td>{{ info.training.training_programme.title }}</td>
+                            <td>{{ info.training.date }} {{ info.training.from_time }} - {{ info.training.to_time }}</td>
+                            <td>{{ info.training.venue.name }}</td>
+                            <td>{{ info.training.trainer.name }}</td>
+                            <td>{{ info.status }}</td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -35,26 +35,29 @@
             <form method="post" id="participants-form">
                 {% csrf_token %}
                 <input type="hidden" name="training_id" id="training-id">
-                <!-- Employees Section -->
+                <!-- Members Section -->
                 <div class="mb-3 row align-items-center">
                     <div class="col-md-5">
-                        <label for="available_employees">Available employees:</label>
-                        <select multiple class="form-control filtered-multiple" id="available_employees"></select>
+                        <label for="available_members">Available members:</label>
+                        <select multiple class="form-control filtered-multiple" id="available_members" name="available_members">
+                        </select>
                     </div>
                     <div class="col-md-2 d-flex flex-column align-items-center">
-                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_employee">&gt;</button>
-                        <button type="button" class="btn btn-primary arrows" id="remove_employee">&lt;</button>
+                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_member">&gt;</button>
+                        <button type="button" class="btn btn-primary arrows" id="remove_member">&lt;</button>
                     </div>
                     <div class="col-md-5">
-                        <label for="nominated_employees">Nominated employees:</label>
-                        <select multiple class="form-control filtered-multiple" id="nominated_employees" name="nominated_employees"></select>
+                        <label for="nominated_members">Nominated members:</label>
+                        <select multiple class="form-control filtered-multiple" id="nominated_members" name="nominated_members">
+                        </select>
                     </div>
                 </div>
                 <!-- Associates Section -->
                 <div class="mb-3 row align-items-center">
                     <div class="col-md-5">
                         <label for="available_associates">Available associates:</label>
-                        <select multiple class="form-control filtered-multiple" id="available_associates"></select>
+                        <select multiple class="form-control filtered-multiple" id="available_associates" name="available_associates">
+                        </select>
                     </div>
                     <div class="col-md-2 d-flex flex-column align-items-center">
                         <button type="button" class="btn btn-primary mb-2 arrows" id="add_associate">&gt;</button>
@@ -62,7 +65,8 @@
                     </div>
                     <div class="col-md-5">
                         <label for="nominated_associates">Nominated associates:</label>
-                        <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates"></select>
+                        <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates">
+                        </select>
                     </div>
                 </div>
                 <div id="removal-comments">
@@ -136,44 +140,44 @@
         let selectedTrainingId = null;
         let removedParticipants = new Set();
         let addedParticipants = new Set();
-
+    
         function updateParticipantsForm(trainingId) {
             $.ajax({
                 url: "{% url 'get_department_participants' 0 %}".replace('0', trainingId),
                 method: 'GET',
                 success: function (data) {
-                    let availableEmployeesSelect = $('#available_employees');
-                    let nominatedEmployeesSelect = $('#nominated_employees');
+                    let availableMembersSelect = $('#available_members');
+                    let nominatedMembersSelect = $('#nominated_members');
                     let availableAssociatesSelect = $('#available_associates');
                     let nominatedAssociatesSelect = $('#nominated_associates');
-                    availableEmployeesSelect.empty();
-                    nominatedEmployeesSelect.empty();
+                    availableMembersSelect.empty();
+                    nominatedMembersSelect.empty();
                     availableAssociatesSelect.empty();
                     nominatedAssociatesSelect.empty();
-
-                    data.participants.forEach(user => {
-                        let option = `<option value="${user.id}">${user.employee_name} (${user.username})</option>`;
-                        if (user.type === 'associate') {
-                            if (user.selected) {
-                                nominatedAssociatesSelect.append(option);
-                            } else {
-                                availableAssociatesSelect.append(option);
-                            }
-                        } else {
-                            if (user.selected) {
-                                nominatedEmployeesSelect.append(option);
-                            } else {
-                                availableEmployeesSelect.append(option);
-                            }
-                        }
-                    });
-
+    
+                    function appendOptions(users, selectElement) {
+                        users.forEach(user => {
+                            let option = `<option value="${user.id}">${user.employee_name} (${user.username})</option>`;
+                            selectElement.append(option);
+                        });
+                    }
+    
+                    appendOptions(data.all_participants.members, availableMembersSelect);
+                    appendOptions(data.all_participants.associates, availableAssociatesSelect);
+    
+                    if (data.selected_participants.members) {
+                        appendOptions(data.selected_participants.members, nominatedMembersSelect);
+                    }
+                    if (data.selected_participants.associates) {
+                        appendOptions(data.selected_participants.associates, nominatedAssociatesSelect);
+                    }
+    
                     $('#removal-comments').empty();
                     $('#removal-comments').append(`<input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;">`);
                 }
             });
         }
-
+    
         function checkRemovalComments() {
             if (removedParticipants.size > 0) {
                 $('.removal-reason').show();
@@ -181,14 +185,13 @@
                 $('.removal-reason').hide();
             }
         }
-
+    
         $('.training-row').on('click', function () {
             $('.training-row').removeClass('table-primary');
             $(this).addClass('table-primary');
             selectedTrainingId = $(this).data('training-id');
             $('#training-id').val(selectedTrainingId);
-
-            // Check the status and allow modification
+    
             const trainingStatus = $(this).find('td:last').text().trim();
             if (trainingStatus === 'Pending') {
                 $('#save-button').show();
@@ -199,28 +202,28 @@
                 $('#confirm-button').hide();
                 $('.arrows').hide();
             }
-
+    
             updateParticipantsForm(selectedTrainingId);
         });
-
-        $('#add_employee').on('click', function () {
-            $('#available_employees option:selected').each(function () {
-                $('#nominated_employees').append($(this).remove());
+    
+        $('#add_member').on('click', function () {
+            $('#available_members option:selected').each(function () {
+                $('#nominated_members').append($(this).remove());
                 removedParticipants.delete($(this).val());
                 addedParticipants.add($(this).val());
             });
             checkRemovalComments();
         });
-
-        $('#remove_employee').on('click', function () {
-            $('#nominated_employees option:selected').each(function () {
-                $('#available_employees').append($(this).remove());
+    
+        $('#remove_member').on('click', function () {
+            $('#nominated_members option:selected').each(function () {
+                $('#available_members').append($(this).remove());
                 addedParticipants.delete($(this).val());
                 removedParticipants.add($(this).val());
             });
             checkRemovalComments();
         });
-
+    
         $('#add_associate').on('click', function () {
             $('#available_associates option:selected').each(function () {
                 $('#nominated_associates').append($(this).remove());
@@ -229,7 +232,7 @@
             });
             checkRemovalComments();
         });
-
+    
         $('#remove_associate').on('click', function () {
             $('#nominated_associates option:selected').each(function () {
                 $('#available_associates').append($(this).remove());
@@ -238,21 +241,21 @@
             });
             checkRemovalComments();
         });
-
+    
         $('#confirm-button').on('click', function () {
             $('#finalizeModal').modal('show');
         });
-
+    
         $('#confirm-finalize-button').on('click', function () {
             let formData = $('#participants-form').serialize() + '&action=confirm_training';
             removedParticipants.forEach(function(userId) {
                 formData += `&removed_users=${userId}&reason_${userId}=${$(`input[name='reason_${userId}']`).val()}`;
             });
-
+    
             addedParticipants.forEach(function(userId) {
                 formData += `&added_users=${userId}`;
             });
-
+    
             $.ajax({
                 url: "{% url 'list_and_finalize_trainings' %}",
                 method: 'POST',
@@ -261,11 +264,11 @@
                     if (data.success) {
                         $('#confirm-button').prop('disabled', true);
                         $('#finalizeModal').modal('hide');
-
+    
                         const row = $(`tr[data-training-id="${selectedTrainingId}"]`);
                         row.addClass('table-success');
                         row.detach().appendTo('#training-sessions-body');
-
+    
                         alert('Training confirmed successfully.');
                     } else {
                         alert('There was an error confirming the training.');
@@ -273,17 +276,17 @@
                 }
             });
         });
-
+    
         $('#save-button').on('click', function () {
             let formData = $('#participants-form').serialize() + '&action=save_changes';
             removedParticipants.forEach(function(userId) {
                 formData += `&removed_users=${userId}&reason_${userId}=${$(`input[name='reason_${userId}']`).val()}`;
             });
-
+    
             addedParticipants.forEach(function(userId) {
                 formData += `&added_users=${userId}`;
             });
-
+    
             $.ajax({
                 url: "{% url 'list_and_finalize_trainings' %}",
                 method: 'POST',
@@ -297,18 +300,18 @@
                 }
             });
         });
-
+    
         $('#participants-form').on('submit', function (event) {
             event.preventDefault();
             let formData = $(this).serialize() + '&action=update_participants';
             removedParticipants.forEach(function(userId) {
                 formData += `&removed_users=${userId}&reason_${userId}=${$(`input[name='reason_${userId}']`).val()}`;
             });
-
+    
             addedParticipants.forEach(function(userId) {
                 formData += `&added_users=${userId}`;
             });
-
+    
             $.ajax({
                 url: "{% url 'list_and_finalize_trainings' %}",
                 method: 'POST',
@@ -323,5 +326,6 @@
             });
         });
     });
+    
 </script>
 {% endblock %}

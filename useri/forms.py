@@ -2,7 +2,8 @@ from django import forms
 from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining , TrainingApproval
 from django.contrib.admin.widgets import FilteredSelectMultiple
 import logging
-
+from django.db.models import Q , F , Max
+from django.utils import timezone
 logger = logging.getLogger(__name__)
 class RequestTrainingForm(forms.ModelForm):
     class Meta:
@@ -386,13 +387,12 @@ class DepartmentAdminForm(forms.ModelForm):
 class TrainingApprovalForm(forms.ModelForm):
     class Meta:
         model = TrainingApproval
-        fields = ['comment']
+        fields = ['training_session', 'department', 'head', 'selected_participants', 'removed_participants', 'removal_reasons', 'approved', 'approval_timestamp', 'pending_approval']
 
 class ReasonForm(forms.Form):
     reason = forms.CharField(widget=forms.Textarea, required=True)
     
     
-
 class ParticipantsForm(forms.Form):
     available_employees = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
@@ -438,6 +438,16 @@ class ParticipantsForm(forms.Form):
 
             nominated_associates_qs = CustomUser.objects.filter(
                 id__in=selected_participants_ids, associated_departments__in=departments
+            ).distinct()
+
+            # Ensure that the queryset includes the new participants before validation
+            self.fields['nominated_associates'].queryset = CustomUser.objects.filter(
+                Q(associated_departments__in=departments) | Q(id__in=selected_participants_ids)
+            ).distinct()
+
+            # Include both available and originally selected associates in the available_associates queryset
+            available_associates_qs = CustomUser.objects.filter(
+                Q(associated_departments__in=departments) | Q(id__in=selected_participants_ids)
             ).distinct()
 
             self.fields['available_employees'].queryset = available_employees_qs

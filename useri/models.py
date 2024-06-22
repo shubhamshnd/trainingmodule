@@ -244,7 +244,7 @@ class TrainingSession(models.Model):
     online_training_file = models.FileField(upload_to='online_training_files/', blank=True, null=True)
     deadline_to_complete = models.DateField(null=True, blank=True)
     selected_participants = models.ManyToManyField(CustomUser, related_name='selected_trainings', blank=True)
-    finalized = models.BooleanField(default=False)  # Indicates if the training session is finalized
+    finalized = models.BooleanField(default=False)
     approvals = models.ManyToManyField('TrainingApproval', related_name='training_sessions', blank=True)
 
     def mark_as_completed(self):
@@ -264,14 +264,13 @@ class TrainingApproval(models.Model):
     training_session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE)
     department = models.ForeignKey(Department, on_delete=models.CASCADE)
     head = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    selected_participants = models.ManyToManyField(CustomUser, related_name='approved_trainings', blank=True)
-    removed_participants = models.ManyToManyField(CustomUser, related_name='removed_trainings', blank=True)
-    removal_reasons = models.JSONField(default=dict, blank=True)
+    selected_participants = models.ManyToManyField(CustomUser, related_name='selected_participants')
+    removed_participants = models.ManyToManyField(CustomUser, related_name='removed_participants')
+    removal_reasons = models.JSONField(default=dict)
     approved = models.BooleanField(default=False)
     approval_timestamp = models.DateTimeField(null=True, blank=True)
-    comment = models.TextField(blank=True, null=True)
     pending_approval = models.BooleanField(default=True)
-
+    comment = models.TextField(blank=True, null=True)  # Ensure this field exists
     def __str__(self):
         return f"Approval for {self.training_session} by {self.head} for {self.department}"
 
