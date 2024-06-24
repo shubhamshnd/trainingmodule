@@ -10,7 +10,7 @@
                     <thead>
                         <tr>
                             <th>Title</th>
-                            <th>Time</th>
+                            <th>Date & Time</th>
                             <th>Venue</th>
                             <th>Trainer</th>
                             <th>Status</th>
@@ -35,6 +35,12 @@
             <form method="post" id="participants-form">
                 {% csrf_token %}
                 <input type="hidden" name="training_id" id="training-id">
+                <!-- Heads Dropdown -->
+                <div class="mb-3">
+                    <label for="heads-dropdown">Heads:</label>
+                    <select class="form-control" id="heads-dropdown" name="heads-dropdown">
+                    </select>
+                </div>
                 <!-- Members Section -->
                 <div class="mb-3 row align-items-center">
                     <div class="col-md-5">
@@ -143,45 +149,48 @@
     
         function updateParticipantsForm(trainingId) {
             $.ajax({
-                url: "{% url 'get_department_participants' 0 %}".replace('0', trainingId),
+                url: "{% url 'fetch_department_participants' 0 %}".replace('0', trainingId),
                 method: 'GET',
                 success: function (data) {
                     console.log("Received data from server:", data);
-    
-                    let availableMembersSelect = $('#available_members');
-                    let nominatedMembersSelect = $('#nominated_members');
-                    let availableAssociatesSelect = $('#available_associates');
-                    let nominatedAssociatesSelect = $('#nominated_associates');
-                    availableMembersSelect.empty();
-                    nominatedMembersSelect.empty();
-                    availableAssociatesSelect.empty();
-                    nominatedAssociatesSelect.empty();
-    
-                    function appendOptions(users, selectElement) {
-                        users.forEach(user => {
-                            let option = `<option value="${user.id}">${user.employee_name} (${user.username})</option>`;
-                            selectElement.append(option);
-                        });
+                    
+                    let headsDropdown = $('#heads-dropdown');
+                    headsDropdown.empty();
+
+                    for (let department in data) {
+                        headsDropdown.append(`<option value="${department}">${department} - ${data[department].head}</option>`);
                     }
-    
-                    // Add available members and associates to their respective lists
-                    appendOptions(data.all_participants.members, availableMembersSelect);
-                    appendOptions(data.all_participants.associates, availableAssociatesSelect);
-    
-                    // Add combined nominated participants to their respective lists
-                    appendOptions(data.combined_nominated_participants.members, nominatedMembersSelect);
-                    appendOptions(data.combined_nominated_participants.associates, nominatedAssociatesSelect);
-    
-                    // Log the displayed list on the frontend
-                    console.log("Displayed Members: ", data.combined_nominated_participants.members.map(user => `${user.employee_name} (${user.username})`));
-                    console.log("Displayed Associates: ", data.combined_nominated_participants.associates.map(user => `${user.employee_name} (${user.username})`));
-    
-                    $('#removal-comments').empty();
-                    $('#removal-comments').append(`<input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;">`);
+
+                    headsDropdown.on('change', function () {
+                        let selectedDepartment = $(this).val();
+                        let selectedData = data[selectedDepartment];
+
+                        let availableMembersSelect = $('#available_members');
+                        let nominatedMembersSelect = $('#nominated_members');
+                        let availableAssociatesSelect = $('#available_associates');
+                        let nominatedAssociatesSelect = $('#nominated_associates');
+                        availableMembersSelect.empty();
+                        nominatedMembersSelect.empty();
+                        availableAssociatesSelect.empty();
+                        nominatedAssociatesSelect.empty();
+
+                        function appendOptions(users, selectElement) {
+                            users.forEach(user => {
+                                let option = `<option value="${user.id}">${user.employee_name} (${user.username})</option>`;
+                                selectElement.append(option);
+                            });
+                        }
+
+                        // Add available members and associates to their respective lists
+                        appendOptions(selectedData.selected_participants, nominatedMembersSelect);
+                        appendOptions(selectedData.removed_participants, availableMembersSelect);
+                        appendOptions(selectedData.selected_participants, nominatedAssociatesSelect);
+                        appendOptions(selectedData.removed_participants, availableAssociatesSelect);
+                    });
                 }
             });
         }
-    
+
         function checkRemovalComments() {
             if (removedParticipants.size > 0) {
                 $('.removal-reason').show();
@@ -189,13 +198,13 @@
                 $('.removal-reason').hide();
             }
         }
-    
+
         $('.training-row').on('click', function () {
             $('.training-row').removeClass('table-primary');
             $(this).addClass('table-primary');
             selectedTrainingId = $(this).data('training-id');
             $('#training-id').val(selectedTrainingId);
-    
+
             const trainingStatus = $(this).find('td:last').text().trim();
             if (trainingStatus === 'Pending') {
                 $('#save-button').show();
@@ -206,10 +215,10 @@
                 $('#confirm-button').hide();
                 $('.arrows').hide();
             }
-    
+
             updateParticipantsForm(selectedTrainingId);
         });
-    
+
         $('#add_member').on('click', function () {
             $('#available_members option:selected').each(function () {
                 $('#nominated_members').append($(this).remove());
@@ -218,7 +227,7 @@
             });
             checkRemovalComments();
         });
-    
+
         $('#remove_member').on('click', function () {
             $('#nominated_members option:selected').each(function () {
                 $('#available_members').append($(this).remove());
@@ -227,7 +236,7 @@
             });
             checkRemovalComments();
         });
-    
+
         $('#add_associate').on('click', function () {
             $('#available_associates option:selected').each(function () {
                 $('#nominated_associates').append($(this).remove());
@@ -236,7 +245,7 @@
             });
             checkRemovalComments();
         });
-    
+
         $('#remove_associate').on('click', function () {
             $('#nominated_associates option:selected').each(function () {
                 $('#available_associates').append($(this).remove());
@@ -245,34 +254,34 @@
             });
             checkRemovalComments();
         });
-    
+
         $('#confirm-button').on('click', function () {
             $('#finalizeModal').modal('show');
         });
-    
+
         $('#confirm-finalize-button').on('click', function () {
             let formData = $('#participants-form').serialize() + '&action=confirm_training';
             removedParticipants.forEach(function(userId) {
                 formData += `&removed_users=${userId}&reason_${userId}=${$(`input[name='reason_${userId}']`).val()}`;
             });
-    
+
             addedParticipants.forEach(function(userId) {
                 formData += `&added_users=${userId}`;
             });
-    
+
             $.ajax({
-                url: "{% url 'list_and_finalize_trainings' %}",
+                url: "{% url 'checker_finalize_training' %}",
                 method: 'POST',
                 data: formData,
                 success: function (data) {
                     if (data.success) {
                         $('#confirm-button').prop('disabled', true);
                         $('#finalizeModal').modal('hide');
-    
+
                         const row = $(`tr[data-training-id="${selectedTrainingId}"]`);
                         row.addClass('table-success');
                         row.detach().appendTo('#training-sessions-body');
-    
+
                         alert('Training confirmed successfully.');
                     } else {
                         alert('There was an error confirming the training.');
@@ -280,19 +289,19 @@
                 }
             });
         });
-    
+
         $('#save-button').on('click', function () {
             let formData = $('#participants-form').serialize() + '&action=save_changes';
             removedParticipants.forEach(function(userId) {
                 formData += `&removed_users=${userId}&reason_${userId}=${$(`input[name='reason_${userId}']`).val()}`;
             });
-    
+
             addedParticipants.forEach(function(userId) {
                 formData += `&added_users=${userId}`;
             });
-    
+
             $.ajax({
-                url: "{% url 'list_and_finalize_trainings' %}",
+                url: "{% url 'checker_finalize_training' %}",
                 method: 'POST',
                 data: formData,
                 success: function (data) {
@@ -304,20 +313,20 @@
                 }
             });
         });
-    
+
         $('#participants-form').on('submit', function (event) {
             event.preventDefault();
             let formData = $(this).serialize() + '&action=update_participants';
             removedParticipants.forEach(function(userId) {
                 formData += `&removed_users=${userId}&reason_${userId}=${$(`input[name='reason_${userId}']`).val()}`;
             });
-    
+
             addedParticipants.forEach(function(userId) {
                 formData += `&added_users=${userId}`;
             });
-    
+
             $.ajax({
-                url: "{% url 'list_and_finalize_trainings' %}",
+                url: "{% url 'checker_finalize_training' %}",
                 method: 'POST',
                 data: formData,
                 success: function (data) {

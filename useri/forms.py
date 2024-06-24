@@ -1,6 +1,7 @@
 from django import forms
 from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining , TrainingApproval
 from django.contrib.admin.widgets import FilteredSelectMultiple
+from django.forms import ModelMultipleChoiceField
 import logging
 from django.db.models import Q , F , Max
 from django.utils import timezone
@@ -393,6 +394,7 @@ class ReasonForm(forms.Form):
     reason = forms.CharField(widget=forms.Textarea, required=True)
     
     
+
 class ParticipantsForm(forms.Form):
     available_employees = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
@@ -440,16 +442,6 @@ class ParticipantsForm(forms.Form):
                 id__in=selected_participants_ids, associated_departments__in=departments
             ).distinct()
 
-            # Ensure that the queryset includes the new participants before validation
-            self.fields['nominated_associates'].queryset = CustomUser.objects.filter(
-                Q(associated_departments__in=departments) | Q(id__in=selected_participants_ids)
-            ).distinct()
-
-            # Include both available and originally selected associates in the available_associates queryset
-            available_associates_qs = CustomUser.objects.filter(
-                Q(associated_departments__in=departments) | Q(id__in=selected_participants_ids)
-            ).distinct()
-
             self.fields['available_employees'].queryset = available_employees_qs
             self.fields['available_associates'].queryset = available_associates_qs
             self.fields['nominated_employees'].queryset = nominated_employees_qs
@@ -458,4 +450,4 @@ class ParticipantsForm(forms.Form):
             logger.info(f"Available Employees Queryset: {available_employees_qs.values_list('id', flat=True)}")
             logger.info(f"Available Associates Queryset: {available_associates_qs.values_list('id', flat=True)}")
             logger.info(f"Nominated Employees Queryset: {nominated_employees_qs.values_list('id', flat=True)}")
-            logger.info(f"Nominated Associates Queryset: {self.fields['nominated_associates'].queryset.values_list('id', flat=True)}")
+            logger.info(f"Nominated Associates Queryset: {nominated_associates_qs.values_list('id', flat=True)}")

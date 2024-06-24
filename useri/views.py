@@ -1014,11 +1014,7 @@ def get_training_selected_users(request, pk):
         'selected_users': selected_users_data
     })
     
-
-APPROVAL_THRESHOLD_HOURS = 48
-
-
-@login_required
+APPROVAL_THRESHOLD_HOURS =48
 def list_and_finalize_trainings(request):
     user = request.user
     departments = user.headed_departments.all()
@@ -1102,6 +1098,7 @@ def list_and_finalize_trainings(request):
                 nominated_employees = form.cleaned_data['nominated_employees']
                 nominated_associates = form.cleaned_data['nominated_associates']
                 removed_users_ids = request.POST.getlist('removed_users')
+                added_users_ids = request.POST.getlist('added_users')
                 removal_reasons = {user_id: request.POST.get(f'reason_{user_id}') for user_id in removed_users_ids}
 
                 try:
@@ -1127,9 +1124,24 @@ def list_and_finalize_trainings(request):
                     new_selected_participants = set(nominated_employees) | set(nominated_associates)
                     new_removed_participants = set(CustomUser.objects.filter(id__in=removed_users_ids))
 
+                    # Include added participants
+                    added_participants = CustomUser.objects.filter(id__in=added_users_ids)
+
+                    # Remove participants who were added back from the removed list
+                    added_back_participants = current_removed_participants.intersection(new_selected_participants)
+                    new_removed_participants = new_removed_participants.difference(added_back_participants)
+
+                    # Remove participants who were selected but then removed from the selected list
+                    removed_added_participants = current_selected_participants.intersection(new_removed_participants)
+                    new_selected_participants = new_selected_participants.difference(removed_added_participants)
+
                     # Update the selected and removed participants
-                    updated_selected_participants = current_selected_participants.union(new_selected_participants).difference(new_removed_participants)
-                    updated_removed_participants = current_removed_participants.union(new_removed_participants)
+                    updated_selected_participants = (current_selected_participants.union(new_selected_participants).difference(current_removed_participants)).union(added_participants)
+                    updated_removed_participants = current_removed_participants.union(new_removed_participants).difference(added_participants)
+
+                    # Ensure no duplicates
+                    updated_selected_participants = updated_selected_participants.difference(updated_removed_participants)
+                    updated_removed_participants = updated_removed_participants.difference(updated_selected_participants)
 
                     approval.selected_participants.set(updated_selected_participants)
                     approval.removed_participants.set(updated_removed_participants)
@@ -1209,6 +1221,10 @@ def get_department_participants(request, training_id):
     all_members, all_associates = separate_participants(all_department_members)
     original_members, original_associates = separate_participants(department_original_participants)
 
+    # Combine original nominated participants and newly added participants, excluding removed ones
+    combined_nominated_members = list(set(original_members) - set(removed_members)) + list(selected_members)
+    combined_nominated_associates = list(set(original_associates) - set(removed_associates)) + list(selected_associates)
+
     # Logic for available participants
     available_members = all_members.exclude(id__in=selected_members).exclude(id__in=removed_members)
     available_associates = all_associates.exclude(id__in=selected_associates).exclude(id__in=removed_associates)
@@ -1216,9 +1232,9 @@ def get_department_participants(request, training_id):
     available_associates = available_associates | removed_associates
 
     participants_data = {
-        "selected_participants": {
-            "members": [get_participant_data(user) for user in selected_members] or [get_participant_data(user) for user in original_members if user not in removed_members],
-            "associates": [get_participant_data(user) for user in selected_associates] or [get_participant_data(user) for user in original_associates if user not in removed_associates],
+        "combined_nominated_participants": {
+            "members": [get_participant_data(user) for user in combined_nominated_members],
+            "associates": [get_participant_data(user) for user in combined_nominated_associates],
         },
         "removed_participants": {
             "members": [get_participant_data(user) for user in removed_members],
@@ -1231,17 +1247,19 @@ def get_department_participants(request, training_id):
     }
 
     # Logging the available, originally selected, and approval participants
-    logger.info(f"Available Members: {[user.username for user in available_members]}")
-    logger.info(f"Available Associates: {[user.username for user in available_associates]}")
-    logger.info(f"Originally Selected Members: {[user.username for user in original_members]}")
-    logger.info(f"Originally Selected Associates: {[user.username for user in original_associates]}")
-    if approval:
-        logger.info(f"Training Approval Selected Members: {[user.username for user in selected_members]}")
-        logger.info(f"Training Approval Selected Associates: {[user.username for user in selected_associates]}")
-        logger.info(f"Training Approval Removed Members: {[user.username for user in removed_members]}")
-        logger.info(f"Training Approval Removed Associates: {[user.username for user in removed_associates]}")
+    # logger.info(f"Available Members: {[user.username for user in available_members]}")
+    # logger.info(f"Available Associates: {[user.username for user in available_associates]}")
+    # logger.info(f"Originally Selected Members: {[user.username for user in original_members]}")
+    # logger.info(f"Originally Selected Associates: {[user.username for user in original_associates]}")
+    # logger.info(f"Added Members: {[user.username for user in selected_members]}")
+    # logger.info(f"Added Associates: {[user.username for user in selected_associates]}")
+    # logger.info(f"Removed Members: {[user.username for user in removed_members]}")
+    # logger.info(f"Removed Associates: {[user.username for user in removed_associates]}")
 
     return JsonResponse(participants_data)
+
+
+
 
 @login_required
 def edit_training(request, pk):
