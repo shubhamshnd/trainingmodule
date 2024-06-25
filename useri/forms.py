@@ -300,7 +300,80 @@ class TrainingRequestForm(forms.ModelForm):
             'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
             'deadline_to_complete': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
         }
-        
+  
+    
+    
+
+class TrainingApprovalForm(forms.ModelForm):
+    class Meta:
+        model = TrainingApproval
+        fields = ['training_session', 'department', 'head', 'selected_participants', 'removed_participants', 'removal_reasons', 'approved', 'approval_timestamp', 'pending_approval']
+
+class ReasonForm(forms.Form):
+    reason = forms.CharField(widget=forms.Textarea, required=True)
+    
+    
+
+class ParticipantsForm(forms.Form):
+    available_employees = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Available Employees", is_stacked=False),
+        required=False
+    )
+    available_associates = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Available Associates", is_stacked=False),
+        required=False
+    )
+    nominated_employees = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Nominated Employees", is_stacked=False),
+        required=False
+    )
+    nominated_associates = forms.ModelMultipleChoiceField(
+        queryset=CustomUser.objects.none(),
+        widget=FilteredSelectMultiple("Nominated Associates", is_stacked=False),
+        required=False
+    )
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        training = kwargs.pop('training', None)
+        super().__init__(*args, **kwargs)
+
+        if user and training:
+            departments = Department.objects.filter(head=user)
+            selected_participants_ids = training.selected_participants.values_list('id', flat=True)
+
+            available_employees_qs = CustomUser.objects.filter(
+                user_departments__in=departments
+            ).distinct().exclude(id__in=selected_participants_ids)
+
+            available_associates_qs = CustomUser.objects.filter(
+                associated_departments__in=departments
+            ).distinct().exclude(id__in=selected_participants_ids)
+
+            nominated_employees_qs = CustomUser.objects.filter(
+                id__in=selected_participants_ids, user_departments__in=departments
+            ).distinct()
+
+            nominated_associates_qs = CustomUser.objects.filter(
+                id__in=selected_participants_ids, associated_departments__in=departments
+            ).distinct()
+
+            self.fields['available_employees'].queryset = available_employees_qs
+            self.fields['available_associates'].queryset = available_associates_qs
+            self.fields['nominated_employees'].queryset = nominated_employees_qs
+            self.fields['nominated_associates'].queryset = nominated_associates_qs
+
+            logger.info(f"Available Employees Queryset: {available_employees_qs.values_list('id', flat=True)}")
+            logger.info(f"Available Associates Queryset: {available_associates_qs.values_list('id', flat=True)}")
+            logger.info(f"Nominated Employees Queryset: {nominated_employees_qs.values_list('id', flat=True)}")
+            logger.info(f"Nominated Associates Queryset: {nominated_associates_qs.values_list('id', flat=True)}")
+            
+            
+            
+      
 class DepartmentAdminForm(forms.ModelForm):
     HEAD_ROLE_CHOICES = [
         ('', 'None'),
@@ -382,72 +455,3 @@ class DepartmentAdminForm(forms.ModelForm):
                 member.save()
 
         return instance
-    
-    
-
-class TrainingApprovalForm(forms.ModelForm):
-    class Meta:
-        model = TrainingApproval
-        fields = ['training_session', 'department', 'head', 'selected_participants', 'removed_participants', 'removal_reasons', 'approved', 'approval_timestamp', 'pending_approval']
-
-class ReasonForm(forms.Form):
-    reason = forms.CharField(widget=forms.Textarea, required=True)
-    
-    
-
-class ParticipantsForm(forms.Form):
-    available_employees = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Available Employees", is_stacked=False),
-        required=False
-    )
-    available_associates = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Available Associates", is_stacked=False),
-        required=False
-    )
-    nominated_employees = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Nominated Employees", is_stacked=False),
-        required=False
-    )
-    nominated_associates = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Nominated Associates", is_stacked=False),
-        required=False
-    )
-
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        training = kwargs.pop('training', None)
-        super().__init__(*args, **kwargs)
-
-        if user and training:
-            departments = Department.objects.filter(head=user)
-            selected_participants_ids = training.selected_participants.values_list('id', flat=True)
-
-            available_employees_qs = CustomUser.objects.filter(
-                user_departments__in=departments
-            ).distinct().exclude(id__in=selected_participants_ids)
-
-            available_associates_qs = CustomUser.objects.filter(
-                associated_departments__in=departments
-            ).distinct().exclude(id__in=selected_participants_ids)
-
-            nominated_employees_qs = CustomUser.objects.filter(
-                id__in=selected_participants_ids, user_departments__in=departments
-            ).distinct()
-
-            nominated_associates_qs = CustomUser.objects.filter(
-                id__in=selected_participants_ids, associated_departments__in=departments
-            ).distinct()
-
-            self.fields['available_employees'].queryset = available_employees_qs
-            self.fields['available_associates'].queryset = available_associates_qs
-            self.fields['nominated_employees'].queryset = nominated_employees_qs
-            self.fields['nominated_associates'].queryset = nominated_associates_qs
-
-            logger.info(f"Available Employees Queryset: {available_employees_qs.values_list('id', flat=True)}")
-            logger.info(f"Available Associates Queryset: {available_associates_qs.values_list('id', flat=True)}")
-            logger.info(f"Nominated Employees Queryset: {nominated_employees_qs.values_list('id', flat=True)}")
-            logger.info(f"Nominated Associates Queryset: {nominated_associates_qs.values_list('id', flat=True)}")

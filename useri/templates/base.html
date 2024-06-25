@@ -50,13 +50,16 @@
             <li class="nav-item {% if request.resolver_match.view_name == 'checker_check_requests' %}active{% endif %}">
               <a class="nav-link" href="{% url 'checker_check_requests' %}">User Requests</a>
             </li>
+            <li class="nav-item {% if request.resolver_match.view_name == 'checker_finalize_trainings' %}active{% endif %}">
+              <a class="nav-link" href="{% url 'checker_finalize_trainings' %}">Finalize Trainings</a>
+            </li>
           {% endif %}
           {% if is_superior %}
             <li class="nav-item {% if request.resolver_match.view_name == 'superior_check_requests' %}active{% endif %}">
               <a class="nav-link" href="{% url 'superior_check_requests' %}">Course Requests</a>
             </li>
             <li class="nav-item {% if request.resolver_match.view_name == 'list_and_finalize_trainings' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'list_and_finalize_trainings' %}">Finalize Training</a>
+              <a class="nav-link" href="{% url 'list_and_finalize_trainings' %}">HR Requests</a>
             </li>
           {% endif %}
           {% if user.is_maker %}

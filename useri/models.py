@@ -246,7 +246,8 @@ class TrainingSession(models.Model):
     selected_participants = models.ManyToManyField(CustomUser, related_name='selected_trainings', blank=True)
     finalized = models.BooleanField(default=False)
     approvals = models.ManyToManyField('TrainingApproval', related_name='training_sessions', blank=True)
-
+    checker_finalized = models.BooleanField(default=False)
+    checker_finalized_timestamp = models.DateTimeField(null=True, blank=True)
     def mark_as_completed(self):
         attendees = AttendanceMaster.objects.filter(training_session=self).values_list('custom_user', flat=True)
         if attendees.exists():

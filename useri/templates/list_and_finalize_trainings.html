@@ -39,16 +39,16 @@
                 <div class="mb-3 row align-items-center">
                     <div class="col-md-5">
                         <label for="available_members">Available members:</label>
-                        <select multiple class="form-control filtered-multiple" id="available_members" name="available_members">
+                        <select multiple class="form-control filtered-multiple" id="available_members" name="available_members" {% if info.status == 'Approved' %}disabled{% endif %}>
                         </select>
                     </div>
                     <div class="col-md-2 d-flex flex-column align-items-center">
-                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_member">&gt;</button>
-                        <button type="button" class="btn btn-primary arrows" id="remove_member">&lt;</button>
+                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_member" {% if info.status == 'Approved' %}disabled{% endif %}>&gt;</button>
+                        <button type="button" class="btn btn-primary arrows" id="remove_member" {% if info.status == 'Approved' %}disabled{% endif %}>&lt;</button>
                     </div>
                     <div class="col-md-5">
                         <label for="nominated_members">Nominated members:</label>
-                        <select multiple class="form-control filtered-multiple" id="nominated_members" name="nominated_members">
+                        <select multiple class="form-control filtered-multiple" id="nominated_members" name="nominated_members" {% if info.status == 'Approved' %}disabled{% endif %}>
                         </select>
                     </div>
                 </div>
@@ -56,24 +56,24 @@
                 <div class="mb-3 row align-items-center">
                     <div class="col-md-5">
                         <label for="available_associates">Available associates:</label>
-                        <select multiple class="form-control filtered-multiple" id="available_associates" name="available_associates">
+                        <select multiple class="form-control filtered-multiple" id="available_associates" name="available_associates" {% if info.status == 'Approved' %}disabled{% endif %}>
                         </select>
                     </div>
                     <div class="col-md-2 d-flex flex-column align-items-center">
-                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_associate">&gt;</button>
-                        <button type="button" class="btn btn-primary arrows" id="remove_associate">&lt;</button>
+                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_associate" {% if info.status == 'Approved' %}disabled{% endif %}>&gt;</button>
+                        <button type="button" class="btn btn-primary arrows" id="remove_associate" {% if info.status == 'Approved' %}disabled{% endif %}>&lt;</button>
                     </div>
                     <div class="col-md-5">
                         <label for="nominated_associates">Nominated associates:</label>
-                        <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates">
+                        <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates" {% if info.status == 'Approved' %}disabled{% endif %}>
                         </select>
                     </div>
                 </div>
                 <div id="removal-comments">
-                    <input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;">
+                    <input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;" {% if info.status == 'Approved' %}disabled{% endif %}>
                 </div>
-                <button type="button" class="btn btn-primary" id="save-button" style="display: none;">Save Changes</button>
-                <button type="button" class="btn btn-primary" id="confirm-button" style="display: none;">Confirm Participants</button>
+                <button type="button" class="btn btn-primary" id="save-button" style="display: none;" {% if info.status == 'Approved' %}disabled{% endif %}>Save Changes</button>
+                <button type="button" class="btn btn-primary" id="confirm-button" style="display: none;" {% if info.status == 'Approved' %}disabled{% endif %}>Confirm Participants</button>
             </form>
         </div>
     </div>
@@ -227,7 +227,6 @@
             });
             checkRemovalComments();
         });
-    
         $('#add_associate').on('click', function () {
             $('#available_associates option:selected').each(function () {
                 $('#nominated_associates').append($(this).remove());
@@ -267,11 +266,16 @@
                 success: function (data) {
                     if (data.success) {
                         $('#confirm-button').prop('disabled', true);
+                        $('#save-button').prop('disabled', true);
+                        $('#add_member').prop('disabled', true);
+                        $('#remove_member').prop('disabled', true);
+                        $('#add_associate').prop('disabled', true);
+                        $('#remove_associate').prop('disabled', true);
                         $('#finalizeModal').modal('hide');
     
                         const row = $(`tr[data-training-id="${selectedTrainingId}"]`);
                         row.addClass('table-success');
-                        row.detach().appendTo('#training-sessions-body');
+                        row.find('td:last').text('Approved');
     
                         alert('Training confirmed successfully.');
                     } else {
