@@ -248,6 +248,10 @@ class TrainingSession(models.Model):
     approvals = models.ManyToManyField('TrainingApproval', related_name='training_sessions', blank=True)
     checker_finalized = models.BooleanField(default=False)
     checker_finalized_timestamp = models.DateTimeField(null=True, blank=True)
+    needs_hod_nomination = models.BooleanField(default=False)
+    nomination_counts = models.JSONField(default=dict)
+    
+
     def mark_as_completed(self):
         attendees = AttendanceMaster.objects.filter(training_session=self).values_list('custom_user', flat=True)
         if attendees.exists():
@@ -260,6 +264,15 @@ class TrainingSession(models.Model):
 
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"
+
+class DepartmentCount(models.Model):
+    training_session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE, related_name='department_counts')
+    department = models.ForeignKey(Department, on_delete=models.CASCADE)
+    head = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    required_employees = models.IntegerField(default=0)
+    required_associates = models.IntegerField(default=0)
+
+
 
 class TrainingApproval(models.Model):
     training_session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE)

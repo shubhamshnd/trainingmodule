@@ -3,10 +3,10 @@ from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme , TrainingApproval
+from .models import DepartmentCount ,CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme , TrainingApproval
 from django.views.decorators.csrf import csrf_protect
 from django.http import HttpResponse
-from .forms import RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm , SuperiorAssignmentForm , TrainingApprovalForm, ReasonForm , ParticipantsForm
+from .forms import  DepartmentCountForm, RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm , SuperiorAssignmentForm , TrainingApprovalForm, ReasonForm , ParticipantsForm
 import logging
 from django.utils import timezone
 from itertools import chain
@@ -17,8 +17,12 @@ from django.db.models import Q , F , Max
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.http import JsonResponse
-
+from django.forms import formset_factory
 import pytz
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+import json
+
 def easter_egg_page(request):
     context = {
         'range_170': range(170),
@@ -904,48 +908,143 @@ def create_training(request):
         'trainers': trainers,
     })
 
-    
 @login_required
 def send_training_request(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)
-    venue_type = training.venue.venue_type if training.venue else 'Online'
+    departments = Department.objects.all()
 
     if request.method == 'POST':
         form = TrainingRequestForm(request.POST, instance=training)
-        if form.is_valid():
+        needs_hod_nomination = request.POST.get('needs_hod_nomination') == 'on'
+
+        department_count_forms = []
+        if needs_hod_nomination:
+            for dept in departments:
+                dept_form = DepartmentCountForm(request.POST, prefix=str(dept.id), initial={
+                    'department_id': dept.id,
+                    'department_name': dept.name,
+                    'head_name': dept.head.employee_name if dept.head else 'N/A',
+                    'available_employees': dept.members.count(),
+                    'available_associates': dept.associates.count(),
+                    'required_employees': request.POST.get(f'{dept.id}-required_employees', 0),
+                    'required_associates': request.POST.get(f'{dept.id}-required_associates', 0),
+                })
+                logger.debug(f"Required employees for department {dept.id}: {request.POST.get(f'{dept.id}-required_employees')}")
+                logger.debug(f"Required associates for department {dept.id}: {request.POST.get(f'{dept.id}-required_associates')}")
+                department_count_forms.append(dept_form)
+
+        logger.info(f"Form data: {request.POST}")
+        logger.info(f"Department Count Forms Data: {[dept_form.data for dept_form in department_count_forms]}")
+        logger.info(f"Form valid: {form.is_valid()}")
+        logger.info(f"Department forms valid: {all(dept_form.is_valid() for dept_form in department_count_forms)}")
+
+        if form.is_valid() and (not needs_hod_nomination or all(dept_form.is_valid() for dept_form in department_count_forms)):
             training = form.save(commit=False)
-            selected_users_ids = request.POST.getlist('selected_users')
-            selected_users = CustomUser.objects.filter(id__in=selected_users_ids)
-            training.selected_participants.set(selected_users)
+            if needs_hod_nomination:
+                DepartmentCount.objects.filter(training_session=training).delete()
+                for dept_form in department_count_forms:
+                    if dept_form.is_valid():
+                        cleaned_data = dept_form.cleaned_data
+                        logger.debug(f"Department form cleaned data: {cleaned_data}")
+                        department = Department.objects.get(id=cleaned_data['department_id'])
+                        head = department.head
+                        required_employees = cleaned_data.get('required_employees', 0)
+                        required_associates = cleaned_data.get('required_associates', 0)
+                        DepartmentCount.objects.create(
+                            training_session=training,
+                            department=department,
+                            head=head,
+                            required_employees=required_employees,
+                            required_associates=required_associates
+                        )
+                training.selected_participants.clear()
+                logger.info(f"Department counts saved for training session {training.id}")
+            else:
+                selected_users_ids = request.POST.getlist('selected_users')
+                selected_users = CustomUser.objects.filter(id__in=selected_users_ids)
+                training.selected_participants.set(selected_users)
+                DepartmentCount.objects.filter(training_session=training).delete()
+                logger.info(f"Selected participants saved for training session {training.id}")
+
             if 'finalize' in request.POST:
-                training.finalized = True  # Mark the training as finalized
+                training.finalized = True
+                logger.info(f"Training session {training.id} has been finalized.")
+
             training.save()
             training.mark_as_completed()
-            return JsonResponse({'success': True})  # Return success response for AJAX
+            logger.info(f"Training session {training.id} saved successfully.")
+            return JsonResponse({'success': True})
         else:
-            return JsonResponse({'success': False, 'errors': form.errors})  # Return errors for AJAX
+            logger.error(f"Form errors: {form.errors}")
+            for dept_form in department_count_forms:
+                if not dept_form.is_valid():
+                    logger.error(f"Department form errors: {dept_form.errors}")
+            return JsonResponse({'success': False, 'errors': form.errors})
     else:
         form = TrainingRequestForm(instance=training)
+        department_count_forms = [
+            DepartmentCountForm(prefix=str(dept.id), initial={
+                'department_id': dept.id,
+                'department_name': dept.name,
+                'head_name': dept.head.employee_name if dept.head else 'N/A',
+                'available_employees': dept.members.count(),
+                'available_associates': dept.associates.count(),
+                'required_employees': training.department_counts.filter(department=dept).first().required_employees if training.department_counts.filter(department=dept).exists() else 0,
+                'required_associates': training.department_counts.filter(department=dept).first().required_associates if training.department_counts.filter(department=dept).exists() else 0,
+            }) for dept in departments
+        ]
 
-    departments = Department.objects.prefetch_related('sub_departments', 'sub_departments__members').all()
-    
-    if training.training_programme:
-        validity_period = training.training_programme.validity
-        valid_date = timezone.now().date() - timedelta(days=365 * validity_period)
-        attendances = AttendanceMaster.objects.filter(
-            training_session__training_programme=training.training_programme,
-            attendance_date__gte=valid_date
-        ).values_list('custom_user_id', flat=True)
-    else:
-        attendances = []
-
+    logger.info(f"Rendering send_training_request view for training session {pk}")
     return render(request, 'send_training_request.html', {
         'form': form,
         'training': training,
-        'venue_type': venue_type,
         'departments': departments,
-        'attendances': list(attendances),
+        'department_count_forms': department_count_forms,
     })
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def store_department_counts(request):
+    training_id = request.POST.get('training_id')
+    training = get_object_or_404(TrainingSession, id=training_id)
+    counts = request.POST.get('counts')
+
+    if not counts:
+        return JsonResponse({'success': False, 'message': 'No counts provided'}, status=400)
+
+    counts = json.loads(counts)
+
+    training.department_counts.clear()
+
+    for dept_id, dept_counts in counts.items():
+        department = get_object_or_404(Department, id=dept_id)
+        head = department.head
+        DepartmentCount.objects.create(
+            training_session=training,
+            department=department,
+            head=head,
+            required_employees=dept_counts.get('required_employees', 0),
+            required_associates=dept_counts.get('required_associates', 0)
+        )
+
+    return JsonResponse({'success': True, 'message': 'Department counts saved successfully'})
+
+@login_required
+def get_department_counts(request):
+    training_id = request.GET.get('training_id')
+    training = get_object_or_404(TrainingSession, id=training_id)
+    department_counts = training.department_counts.all()
+
+    counts = {}
+    for dept_count in department_counts:
+        counts[dept_count.department.id] = {
+            'required_employees': dept_count.required_employees,
+            'required_associates': dept_count.required_associates,
+        }
+
+    return JsonResponse({'success': True, 'counts': counts})
 
 @login_required
 def get_department_details(request):
@@ -994,12 +1093,12 @@ def get_department_details(request):
             'employees': employees_data,
         }
     })
-    
+
 @login_required
 def get_training_selected_users(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)
     selected_users = training.selected_participants.all()
-    
+
     selected_users_data = [
         {
             'id': user.id,
@@ -1010,7 +1109,7 @@ def get_training_selected_users(request, pk):
         }
         for user in selected_users
     ]
-    
+
     return JsonResponse({
         'selected_users': selected_users_data
     })

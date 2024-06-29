@@ -1,5 +1,5 @@
 from django import forms
-from .models import RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining , TrainingApproval
+from .models import DepartmentCount, RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining , TrainingApproval
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.forms import ModelMultipleChoiceField
 import logging
@@ -189,13 +189,15 @@ class TrainingCreationForm(forms.ModelForm):
         label='Online Training File',
         widget=forms.ClearableFileInput(attrs={'class': 'form-control'})
     )
+    needs_hod_nomination = forms.BooleanField(required=False, label='Needs HOD Nomination')
 
     class Meta:
         model = TrainingSession
         fields = [
             'training_programme', 'custom_training_programme', 'venue_type', 
             'venue', 'trainer_type', 'internal_trainer', 'date', 
-            'from_time', 'to_time', 'online_training_link', 'online_training_file'
+            'from_time', 'to_time', 'online_training_link', 'online_training_file', 
+            'needs_hod_nomination'
         ]
         labels = {
             'training_programme': 'Training Programme',
@@ -205,7 +207,8 @@ class TrainingCreationForm(forms.ModelForm):
             'from_time': 'From Time',
             'to_time': 'To Time',
             'online_training_link': 'Online Training Link',
-            'online_training_file': 'Online Training File'
+            'online_training_file': 'Online Training File',
+            'needs_hod_nomination': 'Needs HOD Nomination'
         }
         widgets = {
             'training_programme': forms.Select(attrs={'class': 'form-select'}),
@@ -285,9 +288,11 @@ class ExternalTrainerForm(forms.ModelForm):
         self.fields['city'].required = False
 
 class TrainingRequestForm(forms.ModelForm):
+    needs_hod_nomination = forms.BooleanField(required=False, initial=False)
+
     class Meta:
         model = TrainingSession
-        fields = ['date', 'from_time', 'to_time', 'deadline_to_complete']
+        fields = ['date', 'from_time', 'to_time', 'deadline_to_complete', 'needs_hod_nomination']
         labels = {
             'date': 'Date',
             'from_time': 'From Time',
@@ -300,10 +305,59 @@ class TrainingRequestForm(forms.ModelForm):
             'to_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
             'deadline_to_complete': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
         }
-  
-    
-    
 
+    def clean(self):
+        cleaned_data = super().clean()
+        date = cleaned_data.get("date")
+        from_time = cleaned_data.get("from_time")
+        to_time = cleaned_data.get("to_time")
+        deadline_to_complete = cleaned_data.get("deadline_to_complete")
+        venue_type = self.instance.venue.venue_type if self.instance.venue else None
+
+        if date is None:
+            self.add_error('date', 'Date is required.')
+        if from_time is None:
+            self.add_error('from_time', 'From time is required.')
+        if to_time is None:
+            self.add_error('to_time', 'To time is required.')
+        if venue_type == 'Online' and deadline_to_complete is None:
+            self.add_error('deadline_to_complete', 'Deadline to complete is required for online training.')
+
+        return cleaned_data
+
+class DepartmentCountForm(forms.Form):
+    department_id = forms.IntegerField(widget=forms.HiddenInput())
+    department_name = forms.CharField(required=False)
+    head_name = forms.CharField(required=False)
+    available_employees = forms.IntegerField(required=False)
+    available_associates = forms.IntegerField(required=False)
+    required_employees = forms.IntegerField(min_value=0, required=False)
+    required_associates = forms.IntegerField(min_value=0, required=False)
+
+    def clean_required_employees(self):
+        required_employees = self.cleaned_data.get('required_employees') or 0
+        available_employees = self.cleaned_data.get('available_employees') or 0
+        if required_employees > available_employees:
+            raise forms.ValidationError("Required employees cannot be more than available employees.")
+        return required_employees
+
+    def clean_required_associates(self):
+        required_associates = self.cleaned_data.get('required_associates') or 0
+        available_associates = self.cleaned_data.get('available_associates') or 0
+        if required_associates > available_associates:
+            raise forms.ValidationError("Required associates cannot be more than available associates.")
+        return required_associates
+
+    def clean(self):
+        cleaned_data = super().clean()
+        department_id = cleaned_data.get("department_id")
+        if not department_id:
+            raise forms.ValidationError("Department ID is required.")
+        return cleaned_data
+
+    class Meta:
+        fields = ['department_id', 'required_employees', 'required_associates']
+        
 class TrainingApprovalForm(forms.ModelForm):
     class Meta:
         model = TrainingApproval
