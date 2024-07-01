@@ -13,6 +13,7 @@
                             <th>Time</th>
                             <th>Venue</th>
                             <th>Status</th>
+                            <th>Type</th>
                         </tr>
                     </thead>
                     <tbody id="training-sessions-body">
@@ -30,6 +31,7 @@
                                     Pending
                                 {% endif %}
                             </td>
+                            <td>{{ info.type }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -40,23 +42,39 @@
             <h2>Training Details</h2>
             <div id="training-details" style="max-height: 80vh; overflow-y: auto;">
                 <p>Select a training session to see details</p>
-                <table class="table table-bordered table-sm" id="participants-table" style="font-size: 0.75rem; white-space: nowrap;">
+                <!-- Table for Pre-assigned Trainings -->
+                <table class="table table-bordered table-sm" id="pre-assigned-table" style="font-size: 0.75rem;">
                     <thead>
                         <tr>
                             <th>Head</th>
-                            <th>Original Participants</th>
-                            <th>Added Participants</th>
-                            <th>Removed Participants</th>
-                            <th>Final Participants</th>
+                            <th>Nominated Users</th>
                             <th>Approved</th>
+                            <th>Reason</th>
                         </tr>
                     </thead>
-                    <tbody id="participants-tbody">
+                    <tbody id="pre-assigned-tbody">
+                        <!-- Dynamic rows will be appended here -->
+                    </tbody>
+                </table>
+                <!-- Table for Needs Nomination Trainings -->
+                <table class="table table-bordered table-sm" id="needs-nomination-table" style="font-size: 0.75rem;">
+                    <thead>
+                        <tr>
+                            <th>Head</th>
+                            <th>Required Employees</th>
+                            <th>Required Associates</th>
+                            <th>Added Participants</th>
+                            <th>Total Added</th>
+                            <th>Approved</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="needs-nomination-tbody">
                         <!-- Dynamic rows will be appended here -->
                     </tbody>
                 </table>
             </div>
-            <button type="button" class="btn btn-primary" id="finalize-button" style="position: fixed; bottom: 10px;">Finalize Training</button>
+            <button type="button" class="btn btn-primary" id="finalize-button" style="position: fixed; bottom: 10px;" disabled>Finalize Training</button>
         </div>
     </div>
 </div>
@@ -70,7 +88,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                Are you sure you want to finalize this training session? This action cannot be undone.
+                <p>Are you sure you want to finalize this training session? This action cannot be undone.</p>
+                <p id="heads-pending-approval" style="color: red;"></p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -80,40 +99,80 @@
     </div>
 </div>
 
+<style>
+    #pre-assigned-table th,
+    #needs-nomination-table th {
+        
+        word-wrap: break-word;
+    }
+</style>
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         let selectedTrainingId = null;
+        let allHeadsApproved = true;
+        let confirmOverride = false;
 
         function updateTrainingDetails(trainingId) {
             $.ajax({
                 url: "{% url 'get_checker_training_details' 0 %}".replace('0', trainingId),
                 method: 'GET',
                 success: function (data) {
-                    let tbody = $('#participants-tbody');
-                    tbody.empty();
+                    let preAssignedTbody = $('#pre-assigned-tbody');
+                    let needsNominationTbody = $('#needs-nomination-tbody');
+                    preAssignedTbody.empty();
+                    needsNominationTbody.empty();
+                    allHeadsApproved = true;
+                    let headsPendingApproval = [];
+
+                    let isNeedsNomination = data.some(dept => dept.type === 'Needs Nomination');
+                    $('#pre-assigned-table').toggle(!isNeedsNomination);
+                    $('#needs-nomination-table').toggle(isNeedsNomination);
 
                     data.forEach(department => {
-                        let row = $('<tr></tr>');
-                        row.append('<td>' + department.head.employee_name + '</td>');
-                        
-                        let originalParticipants = department.original_participants.map(p => '<p>' + p.employee_name + '</p>').join('');
-                        row.append('<td>' + originalParticipants + '</td>');
-                        
-                        let addedParticipants = department.added_participants.map(p => '<p style="color: green;">' + p.employee_name + '</p>').join('');
-                        row.append('<td>' + addedParticipants + '</td>');
-                        
-                        let removedParticipants = department.removed_participants.map(p => '<p style="color: red;">' + p.employee_name + '</p>').join('');
-                        row.append('<td>' + removedParticipants + '</td>');
-                        
-                        let finalParticipants = department.final_participants.map(p => '<p>' + p.employee_name + '</p>').join('');
-                        row.append('<td>' + finalParticipants + '</td>');
-                        
-                        row.append('<td>' + (department.approved ? 'Yes' : 'No') + '</td>');
+                        if (department.type === 'Needs Nomination' && (department.required_employees > 0 || department.required_associates > 0)) {
+                            let row = $('<tr></tr>');
+                            row.append('<td>' + department.head.employee_name + '</td>');
+                            row.append('<td>' + department.required_employees + '</td>');
+                            row.append('<td>' + department.required_associates + '</td>');
 
-                        tbody.append(row);
+                            let addedParticipants = department.added_participants.map(p => '<p>' + p.employee_name + '</p>').join('');
+                            row.append('<td>' + addedParticipants + '</td>');
+                            row.append('<td>' + department.total_added + '</td>');
+
+                            row.append('<td>' + (department.approved ? 'Yes' : 'No') + '</td>');
+                            row.append('<td>' + (department.reason ? department.reason : '-') + '</td>');
+
+                            if (!department.approved) {
+                                allHeadsApproved = false;
+                                headsPendingApproval.push(department.head.employee_name);
+                            }
+
+                            needsNominationTbody.append(row);
+                        } else {
+                            let row = $('<tr></tr>');
+                            row.append('<td>' + department.head.employee_name + '</td>');
+
+                            let originalParticipants = department.original_participants.map(p => '<p>' + p.employee_name + '</p>').join('');
+                            row.append('<td>' + originalParticipants + '</td>');
+                            row.append('<td>' + (department.approved ? 'Yes' : 'No') + '</td>');
+                            row.append('<td>' + (department.reason ? department.reason : '-') + '</td>');
+
+                            if (!department.approved) {
+                                allHeadsApproved = false;
+                                headsPendingApproval.push(department.head.employee_name);
+                            }
+
+                            preAssignedTbody.append(row);
+                        }
                     });
+
+                    $('#heads-pending-approval').text(
+                        allHeadsApproved ? '' : 'Heads pending approval: ' + headsPendingApproval.join(', ')
+                    );
+                    $('#finalize-button').prop('disabled', !allHeadsApproved && !confirmOverride);
                 }
             });
         }

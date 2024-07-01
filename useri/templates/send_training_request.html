@@ -40,26 +40,26 @@
                         <tr class="department-count-form">
                             <td>
                                 {{ dept_form.department_name.value }}
-                                <input type="hidden" name="{{ dept_form.department_id.html_name }}" value="{{ dept_form.department_id.value }}">
-                                <input type="hidden" name="{{ dept_form.department_name.html_name }}" value="{{ dept_form.department_name.value }}">
+                                <input type="hidden" name="{{ dept_form.prefix }}-department_id" value="{{ dept_form.initial.department_id }}">
+                                <input type="hidden" name="{{ dept_form.prefix }}-department_name" value="{{ dept_form.department_name.value }}">
                             </td>
                             <td>
                                 {{ dept_form.head_name.value }}
-                                <input type="hidden" name="{{ dept_form.head_name.html_name }}" value="{{ dept_form.head_name.value }}">
+                                <input type="hidden" name="{{ dept_form.prefix }}-head_name" value="{{ dept_form.head_name.value }}">
                             </td>
                             <td class="available-employees">
                                 {{ dept_form.available_employees.value }}
-                                <input type="hidden" name="{{ dept_form.available_employees.html_name }}" value="{{ dept_form.available_employees.value }}">
+                                <input type="hidden" name="{{ dept_form.prefix }}-available_employees" value="{{ dept_form.available_employees.value }}">
                             </td>
                             <td class="available-associates">
                                 {{ dept_form.available_associates.value }}
-                                <input type="hidden" name="{{ dept_form.available_associates.html_name }}" value="{{ dept_form.available_associates.value }}">
+                                <input type="hidden" name="{{ dept_form.prefix }}-available_associates" value="{{ dept_form.available_associates.value }}">
                             </td>
                             <td>
-                                <input type="number" class="form-control required-employees" name="{{ dept_form.required_employees.html_name }}" value="{{ dept_form.required_employees.value }}" min="0">
+                                <input type="number" class="form-control required-employees" name="{{ dept_form.prefix }}-required_employees" value="{{ dept_form.required_employees.value }}" min="0">
                             </td>
                             <td>
-                                <input type="number" class="form-control required-associates" name="{{ dept_form.required_associates.html_name }}" value="{{ dept_form.required_associates.value }}" min="0">
+                                <input type="number" class="form-control required-associates" name="{{ dept_form.prefix }}-required_associates" value="{{ dept_form.required_associates.value }}" min="0">
                             </td>
                         </tr>
                         {% endfor %}
@@ -410,60 +410,90 @@
             const dateField = $('input[name="date"]');
             const fromTimeField = $('input[name="from_time"]');
             const toTimeField = $('input[name="to_time"]');
+            const needsHodNomination = $('#id_needs_hod_nomination').is(':checked');
             const selectedUserIds = selectedUsers.map(user => user.id);
 
-            if (!dateField.val() || !fromTimeField.val() || !toTimeField.val() || selectedUserIds.length === 0) {
-                alert('Please fill in the date, time fields and select participants before finalizing.');
+            if (needsHodNomination) {
+                // Check if department counts are filled when HOD nomination is needed
+                let allCountsFilled = true;
+                $('.required-employees, .required-associates').each(function() {
+                    if ($(this).val() === '' || parseInt($(this).val()) < 0) {
+                        allCountsFilled = false;
+                        return false; // Break the loop
+                    }
+                });
+
+                if (!allCountsFilled) {
+                    alert('Please fill in all department counts before finalizing.');
+                    return;
+                }
             } else {
-                $('#finalizeModal').modal('show');
+                // Check date, time, and participants only if HOD nomination is not needed
+                if (!dateField.val() || !fromTimeField.val() || !toTimeField.val()) {
+                    alert('Please fill in the date and time fields before finalizing.');
+                    return;
+                }
+                if (selectedUserIds.length === 0) {
+                    alert('Please select participants before finalizing.');
+                    return;
+                }
             }
+
+            // If all checks pass, show the finalize modal
+            $('#finalizeModal').modal('show');
         });
 
         $('#confirm-finalize-button').click(function() {
             $('#loader-backdrop').removeClass('d-none');
             $('#training-form').append('<input type="hidden" name="finalize" value="true">');
-            $.ajax({
-                url: $('#training-form').attr('action'),
-                method: 'POST',
-                data: $('#training-form').serialize(),
-                success: function(data) {
-                    $('#loader-backdrop').addClass('d-none');
-                    window.location.reload();
-                },
-                error: function() {
-                    $('#loader-backdrop').addClass('d-none');
-                    alert('There was an error finalizing the training.');
-                }
-            });
+            $('#training-form').submit();
         });
 
         $('#training-form').on('submit', function(event) {
             event.preventDefault();
             $('#loader-backdrop').removeClass('d-none');
             const serializedForm = $(this).serializeArray();
-    
+
             // Add department count data
             $('.department-count-form').each(function() {
                 const $form = $(this);
+                const departmentId = $form.find('input[name$="-department_id"]').val();
                 $form.find('input').each(function() {
                     serializedForm.push({
                         name: $(this).attr('name'),
                         value: $(this).val()
                     });
                 });
+                // Ensure department_id is included
+                serializedForm.push({
+                    name: $form.find('input[name$="-department_id"]').attr('name'),
+                    value: departmentId
+                });
             });
-    
+
             $.ajax({
                 url: $(this).attr('action'),
                 method: 'POST',
                 data: $.param(serializedForm),
                 success: function(data) {
                     $('#loader-backdrop').addClass('d-none');
-                    window.location.reload();
+                    if (data.success) {
+                        if (data.finalized) {
+                            $('#save-button').prop('disabled', true);
+                            $('#finalize-button').prop('disabled', true).hide();
+                            alert('Training has been saved and finalized successfully.');
+                        } else {
+                            alert('Training has been saved successfully.');
+                        }
+                        window.location.reload();
+                    } else {
+                        console.error('Errors:', data.errors);
+                        alert('There was an error saving the training session: ' + JSON.stringify(data.errors));
+                    }
                 },
-                error: function() {
+                error: function(xhr, status, error) {
                     $('#loader-backdrop').addClass('d-none');
-                    alert('There was an error saving the training session.');
+                    alert('There was an error saving the training session: ' + error);
                 }
             });
         });
@@ -484,8 +514,11 @@
                 $('#department-select').prop('disabled', false);
                 $('#department-details').show();
                 $('#department-counts').hide();
+                // Clear department counts when not needed
+                $('.required-employees, .required-associates').val('');
+                updateTotalCounts();
             }
-        }).trigger('change'); // Trigger change event on page load to set the initial state
+        }).trigger('change');
 
         // Update total counts when required counts are changed
         function updateTotalCounts() {

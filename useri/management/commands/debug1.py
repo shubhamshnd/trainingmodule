@@ -1,80 +1,45 @@
-import logging
 from django.core.management.base import BaseCommand
-from django.utils import timezone
-from useri.models import TrainingSession, TrainingApproval, CustomUser
-from django.db.models import Q , F , Max
-from datetime import timedelta, datetime
+from useri.models import TrainingSession, TrainingApproval, DepartmentCount
+import logging
 
+# Configure logger
 logger = logging.getLogger(__name__)
 
-class Command(BaseCommand):
-    help = 'List all trainings for the head and their departments\' members and associates'
 
-    def add_arguments(self, parser):
-        parser.add_argument('head_id', type=int, help='The ID of the head to list trainings for')
+
+class Command(BaseCommand):
+    help = 'Logs all created trainings, their types, selected participants, or department counts and the heads associated with them'
 
     def handle(self, *args, **kwargs):
-        head_id = kwargs['head_id']
-        try:
-            head = CustomUser.objects.get(id=head_id)
-        except CustomUser.DoesNotExist:
-            self.stdout.write(self.style.ERROR('Head with ID {} does not exist'.format(head_id)))
+        trainings = TrainingSession.objects.all()
+        if not trainings.exists():
+            self.stdout.write("No training sessions found.")
             return
 
-        departments = head.headed_departments.all()
-        if not departments.exists():
-            self.stdout.write(self.style.WARNING('User {} is not head of any departments.'.format(head.username)))
-            return
+        for training in trainings:
+            training_type = "Needs Nomination" if training.needs_hod_nomination else "Pre-assigned"
+            self.stdout.write(f"Training: {training}")
+            self.stdout.write(f"Type: {training_type}")
 
-        self.stdout.write(self.style.SUCCESS('User {} is head of the following departments: {}'.format(
-            head.username, [dept.name for dept in departments]
-        )))
-
-        current_time = timezone.now()
-        training_sessions = TrainingSession.objects.filter(
-            Q(selected_participants__user_departments__in=departments) |
-            Q(trainingapproval__head=head)
-        ).distinct().order_by('-date', '-from_time')
-
-        if not training_sessions.exists():
-            self.stdout.write(self.style.WARNING('No training sessions found for the head and their departments.'))
-            return
-
-        self.stdout.write(self.style.SUCCESS('Listing training sessions:'))
-        for training in training_sessions:
-            approval = TrainingApproval.objects.filter(training_session=training, head=head).first()
-            if approval:
-                selected_participants = approval.selected_participants.all()
-                removed_participants = approval.removed_participants.all()
+            if training_type == "Pre-assigned":
+                selected_participants = training.selected_participants.all()
+                self.stdout.write("Selected Participants:")
+                for participant in selected_participants:
+                    self.stdout.write(f" - {participant.employee_name} - {participant.username}")
             else:
-                selected_participants = CustomUser.objects.none()
-                removed_participants = CustomUser.objects.none()
+                department_counts = DepartmentCount.objects.filter(training_session=training)
+                self.stdout.write("Department Counts:")
+                for dept_count in department_counts:
+                    head_name = dept_count.head.employee_name if dept_count.head else "N/A"
+                    self.stdout.write(f" - Department: {dept_count.department.name}, Head: {head_name}")
+                    self.stdout.write(f"   Required Employees: {dept_count.required_employees}")
+                    self.stdout.write(f"   Required Associates: {dept_count.required_associates}")
 
-            original_participants = training.selected_participants.filter(
-                Q(user_departments__in=departments) | Q(associated_departments__in=departments)
-            )
+            approvals = TrainingApproval.objects.filter(training_session=training)
+            self.stdout.write("Heads Associated with Approvals:")
+            for approval in approvals:
+                self.stdout.write(f" - Head: {approval.head.employee_name}")
 
-            training_datetime = datetime.combine(training.date, training.from_time)
-            if training_datetime.tzinfo is None:
-                training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
+            self.stdout.write("\n")
 
-            is_past_training = training_datetime < current_time
-            is_within_threshold = training_datetime - timedelta(hours=48) < current_time
-            approved_by_head = approval and approval.approved
-            status = "Approved" if approved_by_head else ("Pending" if not is_past_training else "Not Approved")
-
-            self.stdout.write('Training ID: {}'.format(training.id))
-            self.stdout.write('Title: {}'.format(training.training_programme.title if training.training_programme else training.custom_training_programme))
-            self.stdout.write('Date: {}'.format(training.date))
-            self.stdout.write('From Time: {}'.format(training.from_time))
-            self.stdout.write('To Time: {}'.format(training.to_time))
-            self.stdout.write('Finalized: {}'.format(training.finalized))
-            self.stdout.write('Status: {}'.format(status))
-            self.stdout.write('Approved by Head: {}'.format(approved_by_head))
-
-            self.stdout.write('Original Participants: {}'.format(', '.join([str(user.username) for user in original_participants])))
-            self.stdout.write('Selected Participants in Approval: {}'.format(', '.join([str(user.username) for user in selected_participants])))
-            self.stdout.write('Removed Participants in Approval: {}'.format(', '.join([str(user.username) for user in removed_participants])))
-            self.stdout.write('---')
-
-        logger.info("Listed trainings for head ID {}".format(head_id))
+        self.stdout.write(self.style.SUCCESS('Successfully logged all trainings.'))

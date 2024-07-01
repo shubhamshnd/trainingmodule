@@ -14,6 +14,7 @@
                             <th>Venue</th>
                             <th>Trainer</th>
                             <th>Status</th>
+                            <th>Type</th>
                         </tr>
                     </thead>
                     <tbody id="training-sessions-body">
@@ -24,6 +25,20 @@
                             <td>{{ info.training.venue.name }}</td>
                             <td>{{ info.training.trainer.name }}</td>
                             <td>{{ info.status }}</td>
+                            <td>{{ info.type }}</td>
+                            <td>
+                                {% if info.type == 'Needs Nomination' %}
+                                    {% for count in info.department_counts %}
+                                        {% if count.head == user %}
+                                            {% if count.required_employees > 0 or count.required_associates > 0 %}
+                                            <div>
+                                                <span>Employees: {{ count.required_employees }}, Associates: {{ count.required_associates }}</span>
+                                            </div>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -39,41 +54,37 @@
                 <div class="mb-3 row align-items-center">
                     <div class="col-md-5">
                         <label for="available_members">Available members:</label>
-                        <select multiple class="form-control filtered-multiple" id="available_members" name="available_members" {% if info.status == 'Approved' %}disabled{% endif %}>
-                        </select>
+                        <select multiple class="form-control filtered-multiple" id="available_members" name="available_members"></select>
                     </div>
                     <div class="col-md-2 d-flex flex-column align-items-center">
-                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_member" {% if info.status == 'Approved' %}disabled{% endif %}>&gt;</button>
-                        <button type="button" class="btn btn-primary arrows" id="remove_member" {% if info.status == 'Approved' %}disabled{% endif %}>&lt;</button>
+                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_member">&gt;</button>
+                        <button type="button" class="btn btn-primary arrows" id="remove_member">&lt;</button>
                     </div>
                     <div class="col-md-5">
                         <label for="nominated_members">Nominated members:</label>
-                        <select multiple class="form-control filtered-multiple" id="nominated_members" name="nominated_members" {% if info.status == 'Approved' %}disabled{% endif %}>
-                        </select>
+                        <select multiple class="form-control filtered-multiple" id="nominated_members" name="nominated_members"></select>
                     </div>
                 </div>
                 <!-- Associates Section -->
                 <div class="mb-3 row align-items-center">
                     <div class="col-md-5">
                         <label for="available_associates">Available associates:</label>
-                        <select multiple class="form-control filtered-multiple" id="available_associates" name="available_associates" {% if info.status == 'Approved' %}disabled{% endif %}>
-                        </select>
+                        <select multiple class="form-control filtered-multiple" id="available_associates" name="available_associates"></select>
                     </div>
                     <div class="col-md-2 d-flex flex-column align-items-center">
-                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_associate" {% if info.status == 'Approved' %}disabled{% endif %}>&gt;</button>
-                        <button type="button" class="btn btn-primary arrows" id="remove_associate" {% if info.status == 'Approved' %}disabled{% endif %}>&lt;</button>
+                        <button type="button" class="btn btn-primary mb-2 arrows" id="add_associate">&gt;</button>
+                        <button type="button" class="btn btn-primary arrows" id="remove_associate">&lt;</button>
                     </div>
                     <div class="col-md-5">
                         <label for="nominated_associates">Nominated associates:</label>
-                        <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates" {% if info.status == 'Approved' %}disabled{% endif %}>
-                        </select>
+                        <select multiple class="form-control filtered-multiple" id="nominated_associates" name="nominated_associates"></select>
                     </div>
                 </div>
                 <div id="removal-comments">
-                    <input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;" {% if info.status == 'Approved' %}disabled{% endif %}>
+                    <input type="text" name="removal_reason" placeholder="Reason for removal" class="form-control mt-1 removal-reason" style="display: none;">
                 </div>
-                <button type="button" class="btn btn-primary" id="save-button" style="display: none;" {% if info.status == 'Approved' %}disabled{% endif %}>Save Changes</button>
-                <button type="button" class="btn btn-primary" id="confirm-button" style="display: none;" {% if info.status == 'Approved' %}disabled{% endif %}>Confirm Participants</button>
+                <button type="button" class="btn btn-primary" id="save-button" style="display: none;">Save Changes</button>
+                <button type="button" class="btn btn-primary" id="confirm-button" style="display: none;">Confirm Participants</button>
             </form>
         </div>
     </div>
@@ -88,6 +99,10 @@
             </div>
             <div class="modal-body">
                 Are you sure you want to confirm this training session? This action cannot be undone.
+                <div id="finalize-reason" style="display: none;">
+                    <label for="finalize-comment">Reason:</label>
+                    <textarea id="finalize-comment" name="comment" class="form-control"></textarea>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -196,15 +211,31 @@
             selectedTrainingId = $(this).data('training-id');
             $('#training-id').val(selectedTrainingId);
     
-            const trainingStatus = $(this).find('td:last').text().trim();
+            const trainingStatus = $(this).find('td:eq(4)').text().trim();
+            const trainingType = $(this).find('td:eq(5)').text().trim();
             if (trainingStatus === 'Pending') {
-                $('#save-button').show();
                 $('#confirm-button').show();
                 $('.arrows').show();
+                if (trainingType === 'Pre-assigned') {
+                    $('#save-button').hide();
+                    $('.arrows').prop('disabled', true);
+                } else {
+                    $('#save-button').show();
+                    $('.arrows').prop('disabled', false);
+                }
             } else {
                 $('#save-button').hide();
                 $('#confirm-button').hide();
                 $('.arrows').hide();
+            }
+
+            // Hide available members and associates for pre-assigned trainings
+            if (trainingType === 'Pre-assigned') {
+                $('#available_members').parent().hide();
+                $('#available_associates').parent().hide();
+            } else {
+                $('#available_members').parent().show();
+                $('#available_associates').parent().show();
             }
     
             updateParticipantsForm(selectedTrainingId);

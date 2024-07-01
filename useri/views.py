@@ -55,8 +55,6 @@ def home(request):
     return response
 
 
-
-
 def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -920,23 +918,20 @@ def send_training_request(request, pk):
         department_count_forms = []
         if needs_hod_nomination:
             for dept in departments:
-                dept_form = DepartmentCountForm(request.POST, prefix=str(dept.id), initial={
-                    'department_id': dept.id,
-                    'department_name': dept.name,
-                    'head_name': dept.head.employee_name if dept.head else 'N/A',
-                    'available_employees': dept.members.count(),
-                    'available_associates': dept.associates.count(),
-                    'required_employees': request.POST.get(f'{dept.id}-required_employees', 0),
-                    'required_associates': request.POST.get(f'{dept.id}-required_associates', 0),
-                })
-                logger.debug(f"Required employees for department {dept.id}: {request.POST.get(f'{dept.id}-required_employees')}")
-                logger.debug(f"Required associates for department {dept.id}: {request.POST.get(f'{dept.id}-required_associates')}")
+                dept_form = DepartmentCountForm(
+                    request.POST, 
+                    prefix=str(dept.id), 
+                    initial={
+                        'department_id': dept.id,
+                        'department_name': dept.name,
+                        'head_name': dept.head.employee_name if dept.head else 'N/A',
+                        'available_employees': dept.members.count(),
+                        'available_associates': dept.associates.count(),
+                        'required_employees': request.POST.get(f'{dept.id}-required_employees', 0),
+                        'required_associates': request.POST.get(f'{dept.id}-required_associates', 0),
+                    }
+                )
                 department_count_forms.append(dept_form)
-
-        logger.info(f"Form data: {request.POST}")
-        logger.info(f"Department Count Forms Data: {[dept_form.data for dept_form in department_count_forms]}")
-        logger.info(f"Form valid: {form.is_valid()}")
-        logger.info(f"Department forms valid: {all(dept_form.is_valid() for dept_form in department_count_forms)}")
 
         if form.is_valid() and (not needs_hod_nomination or all(dept_form.is_valid() for dept_form in department_count_forms)):
             training = form.save(commit=False)
@@ -945,8 +940,8 @@ def send_training_request(request, pk):
                 for dept_form in department_count_forms:
                     if dept_form.is_valid():
                         cleaned_data = dept_form.cleaned_data
-                        logger.debug(f"Department form cleaned data: {cleaned_data}")
-                        department = Department.objects.get(id=cleaned_data['department_id'])
+                        department_id = cleaned_data['department_id']
+                        department = Department.objects.get(id=department_id)
                         head = department.head
                         required_employees = cleaned_data.get('required_employees', 0)
                         required_associates = cleaned_data.get('required_associates', 0)
@@ -958,51 +953,47 @@ def send_training_request(request, pk):
                             required_associates=required_associates
                         )
                 training.selected_participants.clear()
-                logger.info(f"Department counts saved for training session {training.id}")
             else:
                 selected_users_ids = request.POST.getlist('selected_users')
                 selected_users = CustomUser.objects.filter(id__in=selected_users_ids)
                 training.selected_participants.set(selected_users)
                 DepartmentCount.objects.filter(training_session=training).delete()
-                logger.info(f"Selected participants saved for training session {training.id}")
 
             if 'finalize' in request.POST:
                 training.finalized = True
-                logger.info(f"Training session {training.id} has been finalized.")
 
             training.save()
             training.mark_as_completed()
-            logger.info(f"Training session {training.id} saved successfully.")
-            return JsonResponse({'success': True})
+            return JsonResponse({'success': True, 'finalized': training.finalized})
         else:
-            logger.error(f"Form errors: {form.errors}")
+            errors = form.errors.copy()
             for dept_form in department_count_forms:
                 if not dept_form.is_valid():
-                    logger.error(f"Department form errors: {dept_form.errors}")
-            return JsonResponse({'success': False, 'errors': form.errors})
+                    errors.update({f"dept_{dept_form.initial['department_id']}": dept_form.errors})
+            return JsonResponse({'success': False, 'errors': errors})
     else:
         form = TrainingRequestForm(instance=training)
         department_count_forms = [
-            DepartmentCountForm(prefix=str(dept.id), initial={
-                'department_id': dept.id,
-                'department_name': dept.name,
-                'head_name': dept.head.employee_name if dept.head else 'N/A',
-                'available_employees': dept.members.count(),
-                'available_associates': dept.associates.count(),
-                'required_employees': training.department_counts.filter(department=dept).first().required_employees if training.department_counts.filter(department=dept).exists() else 0,
-                'required_associates': training.department_counts.filter(department=dept).first().required_associates if training.department_counts.filter(department=dept).exists() else 0,
-            }) for dept in departments
+            DepartmentCountForm(
+                prefix=str(dept.id), 
+                initial={
+                    'department_id': dept.id,
+                    'department_name': dept.name,
+                    'head_name': dept.head.employee_name if dept.head else 'N/A',
+                    'available_employees': dept.members.count(),
+                    'available_associates': dept.associates.count(),
+                    'required_employees': training.department_counts.filter(department=dept).first().required_employees if training.department_counts.filter(department=dept).exists() else 0,
+                    'required_associates': training.department_counts.filter(department=dept).first().required_associates if training.department_counts.filter(department=dept).exists() else 0,
+                }
+            ) for dept in departments
         ]
 
-    logger.info(f"Rendering send_training_request view for training session {pk}")
     return render(request, 'send_training_request.html', {
         'form': form,
         'training': training,
         'departments': departments,
         'department_count_forms': department_count_forms,
     })
-
-
 @login_required
 @require_POST
 @csrf_exempt
@@ -1114,80 +1105,76 @@ def get_training_selected_users(request, pk):
         'selected_users': selected_users_data
     })
     
-APPROVAL_THRESHOLD_HOURS =48
+#==================================================closed on 1-7-2024=================================================================================================
+APPROVAL_THRESHOLD_HOURS = 48
+
 @login_required
 def list_and_finalize_trainings(request):
     user = request.user
     departments = user.headed_departments.all()
 
     if not departments.exists():
-        logger.info(f"User {user.username} is not head of any departments.")
         return render(request, 'list_and_finalize_trainings.html', {'training_info': []})
 
-    logger.info(f"User {user.username} is head of the following departments: {[dept.name for dept in departments]}")
-
     current_time = timezone.now()
-    logger.info(f"Current time: {current_time}")
-
     training_sessions = TrainingSession.objects.filter(
         Q(selected_participants__user_departments__in=departments) |
-        Q(trainingapproval__head=user)
+        Q(department_counts__head=user)
     ).distinct().order_by('-date', '-from_time')
 
     training_info = []
 
     for training in training_sessions:
-        original_participants = training.selected_participants.all()
-        department_participants = original_participants.filter(
-            Q(user_departments__in=departments) | Q(associated_departments__in=departments)
-        )
+        training_type = "Needs Nomination" if training.needs_hod_nomination else "Pre-assigned"
+        
+        if training_type == "Pre-assigned":
+            selected_participants = training.selected_participants.all()
+            department_heads = CustomUser.objects.filter(
+                Q(user_departments__in=departments) |
+                Q(associated_departments__in=departments),
+                id__in=selected_participants.values('user_departments__head')
+            ).distinct()
+            department_counts = []
+        else:
+            department_counts = DepartmentCount.objects.filter(training_session=training, head=user)
+            department_counts = [
+                count for count in department_counts
+                if count.required_employees > 0 or count.required_associates > 0
+            ]
+            if not department_counts:
+                continue  # Skip trainings with zero required employees and associates
+
+            department_heads = CustomUser.objects.filter(
+                id__in=[count.head.id for count in department_counts]
+            ).distinct()
 
         approval = TrainingApproval.objects.filter(training_session=training, head=user).first()
-        if approval:
-            selected_participants = approval.selected_participants.all()
-            removed_participants = approval.removed_participants.all()
-        else:
-            selected_participants = department_participants
-            removed_participants = CustomUser.objects.none()
+        selected_participants = approval.selected_participants.all() if approval else training.selected_participants.all()
 
-        if department_participants.exists():
-            training_datetime = datetime.combine(training.date, training.from_time)
-            if training_datetime.tzinfo is None:
-                training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
+        training_datetime = datetime.combine(training.date, training.from_time)
+        if training_datetime.tzinfo is None:
+            training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
 
-            is_past_training = training_datetime < current_time
-            is_within_threshold = training_datetime - timedelta(hours=APPROVAL_THRESHOLD_HOURS) < current_time
+        is_past_training = training_datetime < current_time
+        is_within_threshold = training_datetime - timedelta(hours=APPROVAL_THRESHOLD_HOURS) < current_time
 
-            approved_by_head = approval and approval.approved
+        approved_by_head = approval and approval.approved
+        status = "Approved" if approved_by_head else ("Pending" if not is_past_training else "Not Approved")
 
-            status = "Approved" if approved_by_head else ("Pending" if not is_past_training else "Not Approved")
-
-            logger.info(
-                f"Training: {training.training_programme if training.training_programme else training.custom_training_programme}, "
-                f"Date: {training.date}, From Time: {training.from_time}, To Time: {training.to_time}, "
-                f"Finalized: {training.finalized}, Is Past Training: {is_past_training}, "
-                f"Is Within Threshold: {is_within_threshold}, Status: {status}, Approved by Head: {approved_by_head}, "
-                f"Department Participants Count: {department_participants.count()}"
-            )
-
-            training_info.append({
-                'training': training,
-                'show_confirm_button': not training.finalized and not is_past_training and not is_within_threshold and not approved_by_head,
-                'allow_modification': not training.finalized and not is_past_training and not is_within_threshold,
-                'status': status,
-                'original_participants': original_participants,
-                'selected_participants': selected_participants,
-                'removed_participants': removed_participants,
-            })
-
-    logger.info("Training info to be displayed:")
-    for info in training_info:
-        logger.info(f"Training ID: {info['training'].id}, Status: {info['status']}")
+        training_info.append({
+            'training': training,
+            'type': training_type,
+            'show_confirm_button': not training.finalized and not is_past_training and not is_within_threshold and not approved_by_head,
+            'allow_modification': not training.finalized and not is_past_training and not is_within_threshold,
+            'status': status,
+            'selected_participants': selected_participants,
+            'department_counts': department_counts,
+            'department_heads': department_heads,
+        })
 
     if request.method == 'POST':
         training_id = request.POST.get('training_id')
         action = request.POST.get('action')
-
         training = get_object_or_404(TrainingSession, pk=training_id)
         form = ParticipantsForm(request.POST, user=user, training=training)
 
@@ -1195,74 +1182,50 @@ def list_and_finalize_trainings(request):
         logger.info(f"Form data: {request.POST}")
 
         if form.is_valid():
-            try:
-                nominated_employees = form.cleaned_data['nominated_employees']
-                nominated_associates = form.cleaned_data['nominated_associates']
-                removed_users_ids = request.POST.getlist('removed_users')
-                added_users_ids = request.POST.getlist('added_users')
-                removal_reasons = {user_id: request.POST.get(f'reason_{user_id}') for user_id in removed_users_ids}
+            nominated_members_ids = request.POST.getlist('nominated_members')
+            nominated_associates_ids = request.POST.getlist('nominated_associates')
+            added_users_ids = request.POST.getlist('added_users')
+            comment = request.POST.get('comment', '')
 
-                try:
-                    approval, created = TrainingApproval.objects.get_or_create(
-                        training_session=training,
-                        head=user,
-                        defaults={
-                            'department': departments.first(),
-                            'approved': action == 'confirm_training',
-                            'removal_reasons': removal_reasons,
-                            'pending_approval': action != 'confirm_training',
-                        }
-                    )
-                    if not created:
-                        approval.removal_reasons = removal_reasons
-                        if action == 'confirm_training':
-                            approval.approved = True
-                            approval.pending_approval = False
-                        approval.save()
+            logger.info(f"Nominated Members IDs: {nominated_members_ids}")
+            logger.info(f"Nominated Associates IDs: {nominated_associates_ids}")
+            logger.info(f"Added Users IDs: {added_users_ids}")
 
-                    # Get the current selected and removed participants
-                    current_selected_participants = set(approval.selected_participants.all())
-                    current_removed_participants = set(approval.removed_participants.all())
+            nominated_members = CustomUser.objects.filter(id__in=nominated_members_ids)
+            nominated_associates = CustomUser.objects.filter(id__in=nominated_associates_ids)
+            added_participants = CustomUser.objects.filter(id__in=added_users_ids)
 
-                    # Determine the new selected and removed participants
-                    new_selected_participants = set(nominated_employees) | set(nominated_associates)
-                    new_removed_participants = set(CustomUser.objects.filter(id__in=removed_users_ids))
+            approval, created = TrainingApproval.objects.get_or_create(
+                training_session=training,
+                head=user,
+                defaults={
+                    'department': departments.first(),
+                    'approved': action == 'confirm_training',
+                    'pending_approval': action != 'confirm_training',
+                    'comment': comment
+                }
+            )
+            if not created:
+                if action == 'confirm_training':
+                    approval.approved = True
+                    approval.pending_approval = False
+                approval.comment = comment
+                approval.save()
 
-                    # Include added participants
-                    added_participants = CustomUser.objects.filter(id__in=added_users_ids)
+            # Combine nominated members, associates, and added participants
+            updated_selected_participants = set(nominated_members) | set(nominated_associates) | set(added_participants)
 
-                    # Remove participants who were added back from the removed list
-                    added_back_participants = current_removed_participants.intersection(new_selected_participants)
-                    new_removed_participants = new_removed_participants.difference(added_back_participants)
+            logger.info(f"Updated Selected Participants (IDs): {list(updated_selected_participants)}")
 
-                    # Remove participants who were selected but then removed from the selected list
-                    removed_added_participants = current_selected_participants.intersection(new_removed_participants)
-                    new_selected_participants = new_selected_participants.difference(removed_added_participants)
+            # Update the approval's selected participants
+            approval.selected_participants.set(updated_selected_participants)
 
-                    # Update the selected and removed participants
-                    updated_selected_participants = (current_selected_participants.union(new_selected_participants).difference(current_removed_participants)).union(added_participants)
-                    updated_removed_participants = current_removed_participants.union(new_removed_participants).difference(added_participants)
+            logger.info(f"TrainingApproval ID: {approval.id}")
+            logger.info(f"Selected Participants: {list(approval.selected_participants.all().values_list('username', flat=True))}")
 
-                    # Ensure no duplicates
-                    updated_selected_participants = updated_selected_participants.difference(updated_removed_participants)
-                    updated_removed_participants = updated_removed_participants.difference(updated_selected_participants)
-
-                    approval.selected_participants.set(updated_selected_participants)
-                    approval.removed_participants.set(updated_removed_participants)
-
-                    logger.info(f"Changes saved for Training Session ID: {training_id}")
-                    logger.info(f"Selected Participants: {list(approval.selected_participants.all().values_list('username', flat=True))}")
-                    logger.info(f"Removed Participants: {list(approval.removed_participants.all().values_list('username', flat=True))}")
-
-                    return JsonResponse({'success': True})
-                except Exception as e:
-                    logger.error(f"Error creating or updating TrainingApproval for Training Session ID: {training_id}: {str(e)}")
-                    return JsonResponse({'success': False, 'error': str(e)})
-            except Exception as e:
-                logger.error(f"Error processing request for Training Session ID: {training_id}: {str(e)}")
-                return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({'success': True})
         else:
-            logger.error(f"Form validation failed for Training Session ID: {training_id}: {form.errors}")
+            logger.error(f"Form validation failed: {form.errors}")
             return JsonResponse({'success': False, 'error': form.errors})
 
     else:
@@ -1274,76 +1237,53 @@ def list_and_finalize_trainings(request):
         'current_time': current_time,
         'approval_threshold_hours': APPROVAL_THRESHOLD_HOURS,
     })
-
-    
 @login_required
 def get_department_participants(request, training_id):
     user = request.user
     training = get_object_or_404(TrainingSession, id=training_id)
-
     approval = TrainingApproval.objects.filter(training_session=training, head=user).first()
-
-    # Retrieve departments headed by the user
     departments = user.headed_departments.all()
 
     def get_participant_data(user):
         return {
             "id": user.id,
-            "employee_name": str(user),  # Use the __str__ method to get employee_name - username
+            "employee_name": str(user),
             "username": user.username,
-            "type": "associate" if user.work_order_no else "employee"  # Corrected type assignment
+            "type": "associate" if user.work_order_no else "employee"
         }
 
-    # Get all participants in the department
     all_department_members = CustomUser.objects.filter(
         Q(user_departments__in=departments) | Q(associated_departments__in=departments)
     ).distinct()
 
     original_participants = training.selected_participants.all()
-    removed_participants = CustomUser.objects.none()
-    selected_participants = CustomUser.objects.none()
+    selected_participants = approval.selected_participants.all() if approval else CustomUser.objects.none()
 
-    if approval:
-        selected_participants = approval.selected_participants.all()
-        removed_participants = approval.removed_participants.all()
-
-    # Filter participants based on the headed departments
     def filter_by_department(users, departments):
         return users.filter(Q(user_departments__in=departments) | Q(associated_departments__in=departments)).distinct()
 
     department_selected_participants = filter_by_department(selected_participants, departments)
-    department_removed_participants = filter_by_department(removed_participants, departments)
     department_original_participants = filter_by_department(original_participants, departments)
 
-    # Separate participants into members and associates
     def separate_participants(participants):
         members = participants.filter(work_order_no='')
         associates = participants.exclude(work_order_no='')
         return members, associates
 
     selected_members, selected_associates = separate_participants(department_selected_participants)
-    removed_members, removed_associates = separate_participants(department_removed_participants)
     all_members, all_associates = separate_participants(all_department_members)
     original_members, original_associates = separate_participants(department_original_participants)
 
-    # Combine original nominated participants and newly added participants, excluding removed ones
-    combined_nominated_members = list(set(original_members) - set(removed_members)) + list(selected_members)
-    combined_nominated_associates = list(set(original_associates) - set(removed_associates)) + list(selected_associates)
+    combined_nominated_members = list(set(original_members) - set(selected_members)) + list(selected_members)
+    combined_nominated_associates = list(set(original_associates) - set(selected_associates)) + list(selected_associates)
 
-    # Logic for available participants
-    available_members = all_members.exclude(id__in=selected_members).exclude(id__in=removed_members)
-    available_associates = all_associates.exclude(id__in=selected_associates).exclude(id__in=removed_associates)
-    available_members = available_members | removed_members
-    available_associates = available_associates | removed_associates
+    available_members = all_members.exclude(id__in=selected_members)
+    available_associates = all_associates.exclude(id__in=selected_associates)
 
     participants_data = {
         "combined_nominated_participants": {
             "members": [get_participant_data(user) for user in combined_nominated_members],
             "associates": [get_participant_data(user) for user in combined_nominated_associates],
-        },
-        "removed_participants": {
-            "members": [get_participant_data(user) for user in removed_members],
-            "associates": [get_participant_data(user) for user in removed_associates]
         },
         "all_participants": {
             "members": [get_participant_data(user) for user in available_members],
@@ -1351,18 +1291,8 @@ def get_department_participants(request, training_id):
         }
     }
 
-    
-    logger.info(f"Available Members: {[user.username for user in available_members]}")
-    logger.info(f"Available Associates: {[user.username for user in available_associates]}")
-    logger.info(f"Originally Selected Members: {[user.username for user in original_members]}")
-    logger.info(f"Originally Selected Associates: {[user.username for user in original_associates]}")
-    logger.info(f"Added Members: {[user.username for user in selected_members]}")
-    logger.info(f"Added Associates: {[user.username for user in selected_associates]}")
-    logger.info(f"Removed Members: {[user.username for user in removed_members]}")
-    logger.info(f"Removed Associates: {[user.username for user in removed_associates]}")
-
     return JsonResponse(participants_data)
-#===============================================================================================================================================================
+#=====================================================================minor changes but closed 01-07-2024==========================================================================================
 @login_required
 def checker_finalize_trainings(request):
     user = request.user
@@ -1388,17 +1318,18 @@ def checker_finalize_trainings(request):
                     'head': head.head,
                     'approved': head_approval.approved,
                     'selected_participants': head_approval.selected_participants.all(),
-                    'removed_participants': head_approval.removed_participants.all(),
+                    'comment': head_approval.comment,
                 })
             else:
                 approval_status.append({
                     'head': head.head,
                     'approved': False,
                     'selected_participants': original_participants.filter(user_departments=head),
-                    'removed_participants': CustomUser.objects.none(),
+                    'comment': '',
                 })
 
         is_past_training = training.date < current_date
+        training_type = "Pre-assigned" if not training.needs_hod_nomination else "Needs Nomination"
 
         training_info.append({
             'training': training,
@@ -1407,6 +1338,7 @@ def checker_finalize_trainings(request):
             'checker_finalized': training.checker_finalized,
             'checker_finalized_timestamp': training.checker_finalized_timestamp,
             'is_past_training': is_past_training,
+            'type': training_type,
         })
 
     if request.method == 'POST':
@@ -1417,6 +1349,7 @@ def checker_finalize_trainings(request):
 
         if action == 'finalize_training':
             try:
+                heads = Department.objects.filter(members__in=training.selected_participants.all()).distinct()
                 for head in heads:
                     TrainingApproval.objects.update_or_create(
                         training_session=training,
@@ -1436,13 +1369,10 @@ def checker_finalize_trainings(request):
     return render(request, 'checker_finalize_trainings.html', {
         'training_info': training_info,
     })
-    
+
 @login_required
 def get_checker_training_details(request, training_id):
     training = get_object_or_404(TrainingSession, id=training_id)
-
-    # Retrieve all departments and their heads
-    departments = Department.objects.filter(members__in=training.selected_participants.all()).distinct()
 
     def get_participant_data(user):
         return {
@@ -1452,32 +1382,44 @@ def get_checker_training_details(request, training_id):
             "type": "associate" if user.work_order_no else "employee"
         }
 
+    # Retrieve departments through DepartmentCount if needs_hod_nomination, else through selected participants
+    if training.needs_hod_nomination:
+        department_counts = DepartmentCount.objects.filter(training_session=training)
+        departments = Department.objects.filter(id__in=department_counts.values('department_id')).distinct()
+    else:
+        departments = Department.objects.filter(members__in=training.selected_participants.all()).distinct()
+
     participants_data = []
     for department in departments:
         head = department.head
-        original_participants = training.selected_participants.filter(Q(user_departments=department) | Q(associated_departments=department)).distinct()
         approval = TrainingApproval.objects.filter(training_session=training, head=head).first()
 
         if approval:
             selected_participants = approval.selected_participants.all()
-            removed_participants = approval.removed_participants.all()
+            added_participants = selected_participants.difference(training.selected_participants.all())
+            reason = approval.comment if approval.comment else "-"
         else:
-            selected_participants = original_participants
-            removed_participants = CustomUser.objects.none()
+            added_participants = CustomUser.objects.none()
+            reason = "-"
 
-        added_participants = selected_participants.difference(original_participants)
-        final_participants = selected_participants.difference(removed_participants)
+        department_count = DepartmentCount.objects.filter(training_session=training, department=department).first()
 
         participants_data.append({
             'head': get_participant_data(head),
-            'original_participants': [get_participant_data(user) for user in original_participants],
+            'department_name': department.name,
+            'required_employees': department_count.required_employees if department_count else 0,
+            'required_associates': department_count.required_associates if department_count else 0,
             'added_participants': [get_participant_data(user) for user in added_participants],
-            'removed_participants': [get_participant_data(user) for user in removed_participants],
-            'final_participants': [get_participant_data(user) for user in final_participants],
+            'total_added': added_participants.count(),
             'approved': approval.approved if approval else False,
+            'reason': reason,
+            'type': 'Needs Nomination' if training.needs_hod_nomination else 'Pre-assigned',
+            'original_participants': [get_participant_data(user) for user in training.selected_participants.filter(Q(user_departments=department) | Q(associated_departments=department)).distinct()],
         })
 
     return JsonResponse(participants_data, safe=False)
+
+
 
 
 @login_required

@@ -327,10 +327,10 @@ class TrainingRequestForm(forms.ModelForm):
 
 class DepartmentCountForm(forms.Form):
     department_id = forms.IntegerField(widget=forms.HiddenInput())
-    department_name = forms.CharField(required=False)
-    head_name = forms.CharField(required=False)
-    available_employees = forms.IntegerField(required=False)
-    available_associates = forms.IntegerField(required=False)
+    department_name = forms.CharField(required=False, widget=forms.HiddenInput())
+    head_name = forms.CharField(required=False, widget=forms.HiddenInput())
+    available_employees = forms.IntegerField(required=False, widget=forms.HiddenInput())
+    available_associates = forms.IntegerField(required=False, widget=forms.HiddenInput())
     required_employees = forms.IntegerField(min_value=0, required=False)
     required_associates = forms.IntegerField(min_value=0, required=False)
 
@@ -354,9 +354,6 @@ class DepartmentCountForm(forms.Form):
         if not department_id:
             raise forms.ValidationError("Department ID is required.")
         return cleaned_data
-
-    class Meta:
-        fields = ['department_id', 'required_employees', 'required_associates']
         
 class TrainingApprovalForm(forms.ModelForm):
     class Meta:
