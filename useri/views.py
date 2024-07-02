@@ -55,6 +55,47 @@ def home(request):
     return response
 
 
+@login_required
+def user_trainings(request):
+    user = request.user
+    current_date = datetime.now().date()
+    
+    # Fetch training sessions where checker_finalized is True and needs_hod_nomination is False
+    sessions_direct = TrainingSession.objects.filter(
+        selected_participants=user,
+        checker_finalized=True,
+        needs_hod_nomination=False
+    )
+    
+    # Fetch training sessions where checker_finalized is True and needs_hod_nomination is True
+    approvals = TrainingApproval.objects.filter(
+        selected_participants=user,
+        training_session__checker_finalized=True,
+        training_session__needs_hod_nomination=True
+    ).select_related('training_session')
+    
+    sessions_hod = [approval.training_session for approval in approvals]
+    
+    # Combine all sessions
+    all_sessions = list(sessions_direct) + sessions_hod
+    
+    # Format data for the frontend
+    events = [
+        {
+            'date': session.date.strftime('%Y-%m-%d'),
+            'startTime': session.from_time.strftime('%I:%M %p'),
+            'endTime': session.to_time.strftime('%I:%M %p'),
+            'title': session.training_programme.title if session.training_programme else session.custom_training_programme,
+            'venue': session.venue.name if session.venue else 'Online',
+            'trainer': session.trainer.name if session.trainer else 'N/A'
+        }
+        for session in all_sessions
+    ]
+    
+    logger.debug(f"User: {user.username}, Events: {events}")
+    
+    return JsonResponse(events, safe=False)
+
 def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -159,6 +200,22 @@ def request_training(request):
             'superiors': None,
             'select_superior': False
         })
+        
+
+
+@login_required
+def get_approvals(request, request_id):
+    approvals = Approval.objects.filter(request_training_id=request_id).values(
+        'approver__username', 'comment', 'approval_timestamp'
+    )
+    training_request = RequestTraining.objects.get(id=request_id)
+    approval_list = list(approvals)
+    response_data = {
+        'approvals': approval_list,
+        'checker_approval_timestamp': training_request.final_approval_timestamp
+    }
+    return JsonResponse(response_data)
+
 @login_required
 def assign_superior(request):
     if request.method == 'POST':
@@ -802,33 +859,30 @@ def checker_training_detail(request, training_programme_title):
 
 @login_required
 def maker_check_requests(request):
-    # Get counts for each training programme and their statuses
     user_requests = RequestTraining.objects.filter(status__name='CKRapproved').values('training_programme__title', 'status__name').annotate(count=Count('id'))
     hod_assignments = HODTrainingAssignment.objects.filter(status__name='CKRapproved').values('training_programme__title', 'status__name').annotate(count=Count('id'))
 
     combined_counts = defaultdict(lambda: {'total': 0, 'CKRapproved': 0})
-    
+
     for req in user_requests:
         combined_counts[req['training_programme__title']]['total'] += req['count']
         combined_counts[req['training_programme__title']][req['status__name']] += req['count']
-    
+
     for assignment in hod_assignments:
         combined_counts[assignment['training_programme__title']]['total'] += assignment['count']
         combined_counts[assignment['training_programme__title']][assignment['status__name']] += assignment['count']
-    
-    # Convert to list and sort by total count
+
     combined_requests = sorted(combined_counts.items(), key=lambda x: x[1]['total'], reverse=True)
-    
+
     return render(request, 'makercheck.html', {
         'combined_requests': combined_requests,
     })
-
-
 
 @login_required
 def maker_training_detail(request, training_programme_title):
     user_requests = RequestTraining.objects.filter(training_programme__title=training_programme_title, final_approval_timestamp__isnull=False)
     superior_assignments = SuperiorAssignedTraining.objects.filter(training_programme__title=training_programme_title, final_approval_timestamp__isnull=False)
+    trainings = TrainingSession.objects.filter(finalized=False, needs_hod_nomination=False)
 
     combined_requests = sorted(
         list(user_requests) + list(superior_assignments),
@@ -836,11 +890,35 @@ def maker_training_detail(request, training_programme_title):
         reverse=True
     )
 
+    selected_participants = set()
+    for training in trainings:
+        selected_participants.update(training.selected_participants.all())
+
     return render(request, 'maker_training_detail.html', {
         'training_programme_title': training_programme_title,
         'combined_requests': combined_requests,
+        'trainings': trainings,
+        'selected_participants': selected_participants,
     })
-    
+
+@login_required
+def add_to_training(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        training_id = data.get('training_id')
+        user_ids = data.get('user_ids', [])
+        training = TrainingSession.objects.get(id=training_id)
+
+        current_participants = set(training.selected_participants.all())
+        new_participants = set(user_ids) - current_participants
+        training.selected_participants.add(*new_participants)
+
+        # Log the action
+        training_log = f"Added users {', '.join(map(str, new_participants))} to training session {training}."
+        print(training_log)  # Replace with actual logging
+
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False})
 
 @login_required
 def create_training(request):
@@ -1151,12 +1229,14 @@ def list_and_finalize_trainings(request):
         approval = TrainingApproval.objects.filter(training_session=training, head=user).first()
         selected_participants = approval.selected_participants.all() if approval else training.selected_participants.all()
 
-        training_datetime = datetime.combine(training.date, training.from_time)
-        if training_datetime.tzinfo is None:
-            training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
+        training_datetime = None
+        if training.date and training.from_time:
+            training_datetime = datetime.combine(training.date, training.from_time)
+            if training_datetime.tzinfo is None:
+                training_datetime = timezone.make_aware(training_datetime, timezone.get_current_timezone())
 
-        is_past_training = training_datetime < current_time
-        is_within_threshold = training_datetime - timedelta(hours=APPROVAL_THRESHOLD_HOURS) < current_time
+        is_past_training = training_datetime and training_datetime < current_time
+        is_within_threshold = training_datetime and training_datetime - timedelta(hours=APPROVAL_THRESHOLD_HOURS) < current_time
 
         approved_by_head = approval and approval.approved
         status = "Approved" if approved_by_head else ("Pending" if not is_past_training else "Not Approved")
@@ -1237,6 +1317,8 @@ def list_and_finalize_trainings(request):
         'current_time': current_time,
         'approval_threshold_hours': APPROVAL_THRESHOLD_HOURS,
     })
+    
+    
 @login_required
 def get_department_participants(request, training_id):
     user = request.user
@@ -1328,7 +1410,7 @@ def checker_finalize_trainings(request):
                     'comment': '',
                 })
 
-        is_past_training = training.date < current_date
+        is_past_training = training.date and training.date < current_date
         training_type = "Pre-assigned" if not training.needs_hod_nomination else "Needs Nomination"
 
         training_info.append({
@@ -1369,7 +1451,6 @@ def checker_finalize_trainings(request):
     return render(request, 'checker_finalize_trainings.html', {
         'training_info': training_info,
     })
-
 @login_required
 def get_checker_training_details(request, training_id):
     training = get_object_or_404(TrainingSession, id=training_id)
@@ -1415,10 +1496,10 @@ def get_checker_training_details(request, training_id):
             'reason': reason,
             'type': 'Needs Nomination' if training.needs_hod_nomination else 'Pre-assigned',
             'original_participants': [get_participant_data(user) for user in training.selected_participants.filter(Q(user_departments=department) | Q(associated_departments=department)).distinct()],
+            'checker_finalized': training.checker_finalized
         })
 
     return JsonResponse(participants_data, safe=False)
-
 
 
 

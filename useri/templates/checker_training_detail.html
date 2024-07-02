@@ -50,8 +50,7 @@
                         <th scope="col" class="text-nowrap">Source</th>
                         <th scope="col" class="text-nowrap">Assigned By</th>
                         <th scope="col" class="text-nowrap">Date</th>
-                        <th scope="col" class="text-nowrap">Checker Comment</th>
-                        <th scope="col" class="text-nowrap">Checker Approval Timestamp</th>
+
                     </tr>
                 </thead>
                 <tbody>
@@ -103,8 +102,7 @@
                                 {{ request.created_at }}
                             {% endif %}
                         </td>
-                        <td class="text-nowrap">{{ request.checker_comment }}</td>
-                        <td class="text-nowrap">{{ request.checker_approval_timestamp }}</td>
+
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -3,76 +3,116 @@
 {% load custom_filters %}
 {% block content %}
 <div class="container">
-    <a href="{% url 'maker_check_requests' %}" class="btn btn-secondary mb-3">Back</a>
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{% url 'maker_check_requests' %}" class="btn btn-secondary">Back</a>
+        <button id="add-to-training" class="btn btn-primary">Add to Training</button>
+    </div>
     <h2>Training Details for {{ training_programme_title }}</h2>
 
     <div style="max-height: 90vh; overflow-y: auto; margin-top: 20px;">
         <table class="table table-sm" style="font-size: 0.875rem;">
             <thead>
                 <tr>
+                    <th scope="col" class="text-nowrap">Select</th>
                     <th scope="col" class="text-nowrap">User</th>
                     <th scope="col" class="text-nowrap">User Department</th>
                     <th scope="col" class="text-nowrap">Source</th>
                     <th scope="col" class="text-nowrap">Assigned By</th>
                     <th scope="col" class="text-nowrap">Date</th>
-                    <th scope="col" class="text-nowrap">Checker Comment</th>
-                    <th scope="col" class="text-nowrap">Checker Approval Timestamp</th>
+             
                 </tr>
             </thead>
             <tbody>
                 {% for request in combined_requests %}
                 <tr>
                     <td class="text-nowrap">
-                        {% if request|is_instance:'RequestTraining' %}
-                            {{ request.custom_user.employee_name }}
+                        <input type="checkbox" class="participant-checkbox" data-user-id="{{ request.custom_user.id }}" {% if request.custom_user in selected_participants %}checked{% endif %}>
+                    </td>
+                    <td class="text-nowrap">
+                        {{ request.custom_user.employee_name }}
+                    </td>
+                    <td class="text-nowrap">
+                        {% if request.custom_user.department %}
+                            {{ request.custom_user.department.name }}
                         {% else %}
-                            {% for user in request.assigned_users.all %}
-                                {{ user.employee_name }}<br>
-                            {% endfor %}
+                            N/A
                         {% endif %}
                     </td>
                     <td class="text-nowrap">
-                        {% if request|is_instance:'RequestTraining' %}
-                            {% if request.custom_user.department %}
-                                {{ request.custom_user.department.name }}
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        {% else %}
-                            {% if request.department %}
-                                {{ request.department.name }}
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        {% endif %}
+                        User Requested
                     </td>
                     <td class="text-nowrap">
-                        {% if request|is_instance:'RequestTraining' %}
-                            User Requested
-                        {% else %}
-                            HOD Assigned
-                        {% endif %}
+                        -
                     </td>
                     <td class="text-nowrap">
-                        {% if request|is_instance:'SuperiorAssignedTraining' %}
-                            {{ request.assigned_by.employee_name }}
-                        {% else %}
-                            -
-                        {% endif %}
+                        {{ request.request_date }}
                     </td>
-                    <td class="text-nowrap">
-                        {% if request|is_instance:'RequestTraining' %}
-                            {{ request.request_date }}
-                        {% else %}
-                            {{ request.created_at }}
-                        {% endif %}
-                    </td>
-                    <td class="text-nowrap">{{ request.checker_comment }}</td>
-                    <td class="text-nowrap">{{ request.checker_approval_timestamp }}</td>
+                
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+<!-- Modal -->
+<div class="modal fade" id="trainingModal" tabindex="-1" role="dialog" aria-labelledby="trainingModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="trainingModalLabel">Select Training Session</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <ul>
+                    {% for training in trainings %}
+                        <li>
+                            <input type="radio" name="training-session" value="{{ training.id }}"> {{ training }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="confirm-add">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('add-to-training').addEventListener('click', function() {
+    $('#trainingModal').modal('show');
+});
+
+document.getElementById('confirm-add').addEventListener('click', function() {
+    let selectedTraining = document.querySelector('input[name="training-session"]:checked').value;
+    let selectedUsers = [];
+    document.querySelectorAll('.participant-checkbox:checked').forEach(checkbox => {
+        selectedUsers.push(checkbox.dataset.userId);
+    });
+
+    fetch("{% url 'add_to_training' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            training_id: selectedTraining,
+            user_ids: selectedUsers
+        })
+    }).then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Participants successfully added to training.');
+            location.reload();
+        } else {
+            alert('An error occurred.');
+        }
+    });
+});
+</script>
 {% endblock %}

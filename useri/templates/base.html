@@ -30,6 +30,52 @@
       width: 40px; /* Adjust the size as needed */
       height: 40px;
     }
+    /* HTML: <div class="loader"></div> */
+    .loader-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1050;
+    }
+    
+    .loader {    
+      --r1: 154%;
+      --r2: 68.5%;
+      width: 100px; /* Increased width */
+      aspect-ratio: 1;
+      border-radius: 50%; 
+      background:
+        radial-gradient(var(--r1) var(--r2) at top   ,#0000 79.5%,#874CCC 80%), /* Matching the navbar color */
+        radial-gradient(var(--r1) var(--r2) at bottom,#874CCC 79.5%,#0000 80%),
+        radial-gradient(var(--r1) var(--r2) at top   ,#0000 79.5%,#874CCC 80%),
+        #ccc;
+      background-size: 50.5% 220%;
+      background-position: -100% 0%,0% 0%,100% 0%;
+      background-repeat: no-repeat;
+      animation: l9 3s infinite linear;
+    }
+    
+    @keyframes l9 {
+      0%   {background-position: -100% 0%, 0% 0%, 100% 0%}
+      8.33%  {background-position: -83.33% 8.33%, 16.67% 8.33%, 116.67% 8.33%}
+      16.67%  {background-position: -66.67% 16.67%, 33.33% 16.67%, 133.33% 16.67%}
+      25%  {background-position: -50% 25%, 50% 25%, 150% 25%}
+      33.33%  {background-position: -33.33% 33.33%, 66.67% 33.33%, 166.67% 33.33%}
+      41.67%  {background-position: -16.67% 41.67%, 83.33% 41.67%, 183.33% 41.67%}
+      50%  {background-position: 0% 50%, 100% 50%, 200% 50%}
+      58.33%  {background-position: -16.67% 58.33%, 83.33% 58.33%, 183.33% 58.33%}
+      66.67%  {background-position: -33.33% 66.67%, 66.67% 66.67%, 166.67% 66.67%}
+      75%  {background-position: -50% 75%, 50% 75%, 150% 75%}
+      83.33%  {background-position: -66.67% 83.33%, 33.33% 83.33%, 133.33% 83.33%}
+      91.67%  {background-position: -83.33% 91.67%, 16.67% 91.67%, 116.67% 91.67%}
+      100% {background-position: -100% 100%, 0% 100%, 100% 100%}
+    }
   </style>
   {% block extrastyles %}
   {% endblock %}
@@ -101,13 +147,15 @@
         </div>
       </div>
     </div>
+    <div class="loader-backdrop" id="loaderBackdrop">
+      <div class="loader"></div>
+    </div>
     {% block content %}
     {% endblock %}
   </div>
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-treeview/1.4.1/jquery.treeview.min.js"></script> 
   <script>
     // Function to generate QR code
@@ -119,6 +167,18 @@
       var modal = new bootstrap.Modal(document.getElementById('qrModal'), { backdrop: false }); // Initialize modal without backdrop
       modal.show(); // Show modal
     }
+    
+    // Show loader when a link is clicked
+    document.querySelectorAll('.navbar-nav .nav-link').forEach(link => {
+      link.addEventListener('click', () => {
+        document.getElementById('loaderBackdrop').style.display = 'flex';
+      });
+    });
+
+    // Hide loader when page is loaded
+    window.addEventListener('load', () => {
+      document.getElementById('loaderBackdrop').style.display = 'none';
+    });
   </script>
   {% block extrascripts %}
   {% endblock %}

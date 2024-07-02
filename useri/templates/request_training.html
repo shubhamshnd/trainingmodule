@@ -45,7 +45,8 @@
                         <tr>
                             <th scope="col">Training Programme / Other Training</th>
                             <th scope="col">Request Date</th>
-                            <th scope="col">Status</th>
+                            
+                            <th scope="col">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -59,15 +60,50 @@
                                 {% endif %}
                             </td>
                             <td>{{ request.request_date }}</td>
-                            <td>{{ request.status.name }}</td>
+                            
+                            <td>
+                                <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#approvalsModal" data-request-id="{{ request.id }}">View Approvals</button>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="3">No training requests found.</td>
+                            <td colspan="4">No training requests found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for viewing approvals -->
+<div class="modal fade" id="approvalsModal" tabindex="-1" aria-labelledby="approvalsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="approvalsModalLabel">Approval Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th scope="col">Approver</th>
+                            <th scope="col">Comment</th>
+                            <th scope="col">Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="approvalsDetails">
+                        <!-- Approval details will be inserted here -->
+                    </tbody>
+                </table>
+                <div id="checkerApprovalTimestamp" class="mt-3">
+                    <!-- Checker approval timestamp will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -107,17 +143,19 @@
         const trainingProgrammeField = document.getElementById('id_training_programme');
         const otherTrainingField = document.getElementById('id_other_training');
 
-        function toggleOtherTrainingField() {
-            if (trainingProgrammeField.value) {
-                otherTrainingField.disabled = true;
-                otherTrainingField.value = '';
-            } else {
-                otherTrainingField.disabled = false;
+        if (trainingProgrammeField && otherTrainingField) {
+            function toggleOtherTrainingField() {
+                if (trainingProgrammeField.value) {
+                    otherTrainingField.disabled = true;
+                    otherTrainingField.value = '';
+                } else {
+                    otherTrainingField.disabled = false;
+                }
             }
-        }
 
-        trainingProgrammeField.addEventListener('change', toggleOtherTrainingField);
-        toggleOtherTrainingField();
+            trainingProgrammeField.addEventListener('change', toggleOtherTrainingField);
+            toggleOtherTrainingField();
+        }
 
         {% if select_superior and superiors|length > 1 %}
         // Trigger modal if there are multiple superiors
@@ -126,4 +164,60 @@
         {% endif %}
     });
 </script>
+
+<!-- Add this script at the end of your file, before the closing `</body>` tag -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const approvalsModal = document.getElementById('approvalsModal');
+        if (approvalsModal) {
+            approvalsModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const requestId = button.getAttribute('data-request-id');
+
+                fetch(`/get_approvals/${requestId}/`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        const approvalsDetails = document.getElementById('approvalsDetails');
+                        const checkerApprovalTimestamp = document.getElementById('checkerApprovalTimestamp');
+
+                        approvalsDetails.innerHTML = '';
+                        checkerApprovalTimestamp.innerHTML = '';
+
+                        data.approvals.forEach(approval => {
+                            const row = document.createElement('tr');
+
+                            const approverCell = document.createElement('td');
+                            approverCell.textContent = approval.approver__username;
+                            row.appendChild(approverCell);
+
+                            const commentCell = document.createElement('td');
+                            commentCell.textContent = approval.comment;
+                            row.appendChild(commentCell);
+
+                            const timestampCell = document.createElement('td');
+                            timestampCell.textContent = approval.approval_timestamp;
+                            row.appendChild(timestampCell);
+
+                            approvalsDetails.appendChild(row);
+                        });
+
+                        if (data.checker_approval_timestamp) {
+                            const timestampDiv = document.createElement('div');
+                            timestampDiv.innerHTML = `<strong>Final Approval Timestamp:</strong> ${data.checker_approval_timestamp}`;
+                            checkerApprovalTimestamp.appendChild(timestampDiv);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('There was a problem with the fetch operation:', error);
+                    });
+            });
+        }
+    });
+</script>
+
 {% endblock %}
