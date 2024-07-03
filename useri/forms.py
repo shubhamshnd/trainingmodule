@@ -1,5 +1,5 @@
 from django import forms
-from .models import DepartmentCount, RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining , TrainingApproval
+from .models import Feedback ,DepartmentCount, RequestTraining, TrainingProgramme , HODTrainingAssignment , CustomUser , VenueMaster, TrainerMaster , TrainingSession , Department , SuperiorAssignedTraining , TrainingApproval
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.forms import ModelMultipleChoiceField
 import logging
@@ -489,3 +489,24 @@ class DepartmentAdminForm(forms.ModelForm):
                 member.save()
 
         return instance
+    
+
+class FeedbackForm(forms.ModelForm):
+    class Meta:
+        model = Feedback
+        fields = [
+            'name', 'employee_number', 'date', 'designation', 'department', 'programme_title',
+            'faculty', 'duration', 'question_1', 'question_2', 'question_3', 'question_4',
+            'question_5', 'question_6a', 'question_6b', 'question_6c', 'question_6d', 'question_6e',
+            'question_7', 'question_8', 'question_8_quality_rate', 'question_9', 'question_10'
+        ]
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'duration': forms.NumberInput(attrs={'readonly': 'readonly'}),
+            'name': forms.TextInput(attrs={'readonly': 'readonly'}),
+            'employee_number': forms.TextInput(attrs={'readonly': 'readonly'}),
+            'designation': forms.TextInput(attrs={'readonly': 'readonly'}),
+            'department': forms.TextInput(attrs={'readonly': 'readonly'}),
+            'programme_title': forms.TextInput(attrs={'readonly': 'readonly'}),
+            'faculty': forms.TextInput(attrs={'readonly': 'readonly'}),
+        }

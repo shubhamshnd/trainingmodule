@@ -3,10 +3,10 @@ from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import DepartmentCount ,CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme , TrainingApproval
+from .models import Feedback, DepartmentCount ,CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme , TrainingApproval
 from django.views.decorators.csrf import csrf_protect
 from django.http import HttpResponse
-from .forms import  DepartmentCountForm, RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm , SuperiorAssignmentForm , TrainingApprovalForm, ReasonForm , ParticipantsForm
+from .forms import  FeedbackForm ,DepartmentCountForm, RequestTrainingForm, TrainingRequestApprovalForm, CheckerApprovalForm ,  TrainingCreationForm, ExternalTrainerForm ,  TrainingRequestForm , SuperiorAssignmentForm , TrainingApprovalForm, ReasonForm , ParticipantsForm
 import logging
 from django.utils import timezone
 from itertools import chain
@@ -40,14 +40,18 @@ def home(request):
     user_is_superior = user.headed_departments.exists()
     is_maker = user.is_maker
     is_checker = user.is_checker
-
+    attended_sessions = AttendanceMaster.objects.filter(custom_user=user).select_related('training_session').order_by('-training_session__date')
+    feedback_sessions = Feedback.objects.filter(attendance__custom_user=user)
+    feedback_sessions_ids = feedback_sessions.values_list('attendance_id', flat=True)
     context = {
         'is_checker': is_checker,
         'is_maker': is_maker,
         'is_superior': user_is_superior,
         'role': 'checker' if is_checker else ('maker' if is_maker else ('superior' if user_is_superior else 'member')),
+        'attended_sessions': attended_sessions,
+        'feedback_sessions_ids': feedback_sessions_ids,
     }
-
+    
     response = render(request, 'home.html', context)
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
@@ -1661,3 +1665,42 @@ def delete_training(request, pk):
 
     return render(request, 'delete_training.html', {'training': training})
 
+@login_required
+def get_attended_sessions(request):
+    user = request.user
+    attended_sessions = AttendanceMaster.objects.filter(custom_user=user).select_related('training_session')
+    return attended_sessions
+
+
+
+@login_required
+@csrf_protect
+def feedback_form(request, session_id):
+    session = get_object_or_404(TrainingSession, id=session_id)
+    attendance = get_object_or_404(AttendanceMaster, custom_user=request.user, training_session=session)
+    
+    # Calculate duration in hours
+    duration = (datetime.combine(datetime.min, session.to_time) - datetime.combine(datetime.min, session.from_time)).total_seconds() / 3600
+
+    initial_data = {
+        'name': request.user.employee_name,
+        'employee_number': request.user.username,
+        'date': timezone.now().date(),
+        'designation': request.user.designation,
+        'department': request.user.department,  # Assuming department is a string
+        'programme_title': session.training_programme.title,
+        'faculty': session.trainer.name if hasattr(session.trainer, 'name') else session.trainer,
+        'duration': duration,
+    }
+
+    if request.method == 'POST':
+        form = FeedbackForm(request.POST, initial=initial_data)
+        if form.is_valid():
+            feedback = form.save(commit=False)
+            feedback.attendance = attendance
+            feedback.save()
+            return redirect('home')  # Redirect to the home page after submission
+    else:
+        form = FeedbackForm(initial=initial_data)
+
+    return render(request, 'feedback_form.html', {'form': form, 'session': session})

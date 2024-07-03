@@ -339,3 +339,32 @@ class Approval(models.Model):
         get_latest_by = 'approval_timestamp'
 
 
+class Feedback(models.Model):
+    attendance = models.ForeignKey(AttendanceMaster, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+    employee_number = models.CharField(max_length=255)
+    date = models.DateField()
+    designation = models.CharField(max_length=255, blank=True, null=True)
+    department = models.CharField(max_length=255)
+    programme_title = models.CharField(max_length=255)
+    faculty = models.CharField(max_length=255)
+    duration = models.FloatField()
+    
+    question_1 = models.CharField(max_length=255, blank=True)
+    question_2 = models.CharField(max_length=255, blank=True)
+    question_3 = models.CharField(max_length=255, blank=True)
+    question_4 = models.TextField(blank=True)
+    question_5 = models.CharField(max_length=255, blank=True)
+    question_6a = models.CharField(max_length=3, blank=True)
+    question_6b = models.CharField(max_length=3, blank=True)
+    question_6c = models.CharField(max_length=3, blank=True)
+    question_6d = models.CharField(max_length=3, blank=True)
+    question_6e = models.TextField(blank=True)
+    question_7 = models.CharField(max_length=255, blank=True)
+    question_8 = models.CharField(max_length=255, blank=True)
+    question_8_quality_rate = models.IntegerField(null=True, blank=True)
+    question_9 = models.CharField(max_length=255, blank=True)
+    question_10 = models.TextField(blank=True)
+    
+    def __str__(self):
+        return f"Feedback from {self.name} for session {self.attendance.training_session}"

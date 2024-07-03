@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block extrastyles %}
+<style>
+    .feedback-container { margin-top: 20px; }
+    .nav-tabs { margin-bottom: 20px; }
+    .tab-content { padding-top: 10px; }
+    .form-control[readonly] {
+        background-color: #f9f9f9;
+        cursor: not-allowed;
+    }
+    .scrollable-content {
+        height: 80vh;
+        overflow-y: auto;
+        padding-right: 15px;
+    }
+    .scrollable-content::-webkit-scrollbar {
+        width: 8px;
+    }
+    .scrollable-content::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    .scrollable-content::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    .scrollable-content::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container feedback-container">
+    <h2>Feedback Form for {{ session.training_programme.title }}</h2>
+    <form method="post">
+        {% csrf_token %}
+        <div class="row">
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" class="form-control" id="name" name="name" value="{{ form.initial.name }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="date">Date:</label>
+                    <input type="text" class="form-control" id="date" name="date" value="{{ form.initial.date }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="employee_number">Employee No:</label>
+                    <input type="text" class="form-control" id="employee_number" name="employee_number" value="{{ form.initial.employee_number }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="designation">Designation:</label>
+                    <input type="text" class="form-control" id="designation" name="designation" value="{{ form.initial.designation }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="department">Department:</label>
+                    <input type="text" class="form-control" id="department" name="department" value="{{ form.initial.department }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="programme_title">Programme Title:</label>
+                    <input type="text" class="form-control" id="programme_title" name="programme_title" value="{{ form.initial.programme_title }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="faculty">Faculty:</label>
+                    <input type="text" class="form-control" id="faculty" name="faculty" value="{{ form.initial.faculty }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="duration">Duration (hours):</label>
+                    <input type="text" class="form-control" id="duration" name="duration" value="{{ form.initial.duration }}" readonly>
+                </div>
+            </div>
+            <div class="col-md-9 scrollable-content">
+                <ul class="nav nav-tabs" id="languageTabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="english-tab" data-toggle="tab" href="#english" role="tab" aria-controls="english" aria-selected="true">English</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="hindi-tab" data-toggle="tab" href="#hindi" role="tab" aria-controls="hindi" aria-selected="false">हिंदी</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="marathi-tab" data-toggle="tab" href="#marathi" role="tab" aria-controls="marathi" aria-selected="false">मराठी</a>
+                    </li>
+                </ul>
+                <div class="tab-content" id="languageTabsContent">
+                    <div class="tab-pane fade show active" id="english" role="tabpanel" aria-labelledby="english-tab">
+                        {% include 'feedback_questions_english.html' %}
+                    </div>
+                    <div class="tab-pane fade" id="hindi" role="tabpanel" aria-labelledby="hindi-tab">
+                        {% include 'feedback_questions_hindi.html' %}
+                    </div>
+                    <div class="tab-pane fade" id="marathi" role="tabpanel" aria-labelledby="marathi-tab">
+                        {% include 'feedback_questions_marathi.html' %}
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Submit</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extrascripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var triggerTabList = [].slice.call(document.querySelectorAll('#languageTabs a'))
+        triggerTabList.forEach(function (triggerEl) {
+            var tabTrigger = new bootstrap.Tab(triggerEl)
+
+            triggerEl.addEventListener('click', function (event) {
+                event.preventDefault()
+                tabTrigger.show()
+            })
+        })
+    });
+</script>
+{% endblock %}

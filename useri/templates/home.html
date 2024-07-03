@@ -41,7 +41,7 @@
         color: #fff;
     }
     .training-day {
-        background-color: #FFD700 !important; /* Gold color for training days */
+        background-color: #FFD700 !important;
         color: #fff;
     }
     .time-slots {
@@ -60,8 +60,8 @@
         box-sizing: border-box;
         font-size: 12px;
         position: relative;
-        margin: 0; /* Ensure no margin is added */
-        padding: 0; /* Ensure no padding is added */
+        margin: 0;
+        padding: 0;
     }
     .time-label {
         width: 60px;
@@ -80,7 +80,7 @@
     .event-bar {
         position: absolute;
         background-color: #AAC4FF;
-        color: #000000;
+        color: #000;
         padding: 2px;
         border-radius: 5px;
         font-size: 10px;
@@ -126,18 +126,74 @@
     .center {
         text-align: center;
     }
+    .training-list {
+        margin-top: 30px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .training-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .training-table th, .training-table td {
+        border: 1px solid #ddd;
+        padding: 10px;
+    }
+    .training-table th {
+        background-color: #f2f2f2;
+        text-align: center;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .training-table td {
+        text-align: left;
+    }
+    .btn-feedback {
+        display: inline-block;
+        padding: 5px 10px;
+        background-color: #007bff;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 4px;
+    }
+    .btn-feedback:hover {
+        background-color: #0056b3;
+    }
+    .custom-btn-sm {
+        font-size: 15px; /* Adjust the font size as needed */
+        padding: 3px 6px; /* Adjust padding to make the button smaller */
+        line-height: 1.5; /* Adjust line height to match the button size */
+    }
+    
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-md-2">
-        <div class="container">
-            {% if user.is_authenticated %}
-                <p>Welcome, {{ user.username }}! Your role is {{ role }}.</p>
-            {% else %}
-                <p>Welcome, guest!</p>
-            {% endif %}
+        <div class="training-list">
+            <table class="training-table">
+                <thead>
+                    <tr>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for attendance in attended_sessions %}
+                        <tr>
+                            <td>
+                                {{ attendance.training_session.training_programme.title }} - {{ attendance.training_session.date }}
+                                {% if attendance.id in feedback_sessions_ids %}
+                                <button class="btn btn-secondary btn-sm custom-btn-sm" disabled>Feedback Submitted</button>
+                                {% else %}
+                                <a href="{% url 'feedback_form' attendance.training_session.id %}" class="btn btn-primary btn-sm custom-btn-sm">Fill Feedback Form</a>
+                                {% endif %}                            
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
     <div class="col-md-10">
