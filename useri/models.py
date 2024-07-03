@@ -250,7 +250,7 @@ class TrainingSession(models.Model):
     checker_finalized_timestamp = models.DateTimeField(null=True, blank=True)
     needs_hod_nomination = models.BooleanField(default=False)
     nomination_counts = models.JSONField(default=dict)
-    
+    attendance_frozen = models.BooleanField(default=False)
 
     def mark_as_completed(self):
         attendees = AttendanceMaster.objects.filter(training_session=self).values_list('custom_user', flat=True)
@@ -260,7 +260,8 @@ class TrainingSession(models.Model):
 
     @property
     def is_completed(self):
-        return AttendanceMaster.objects.filter(training_session=self, custom_user__in=self.selected_participants.all()).exists()
+        return self.attendance_frozen
+
 
     def __str__(self):
         return f"{self.training_programme.title if self.training_programme else self.custom_training_programme} at {self.venue.name if self.venue else 'Online'} by {self.trainer.name if self.trainer else 'N/A'}"
@@ -285,6 +286,7 @@ class TrainingApproval(models.Model):
     approval_timestamp = models.DateTimeField(null=True, blank=True)
     pending_approval = models.BooleanField(default=True)
     comment = models.TextField(blank=True, null=True)  # Ensure this field exists
+    
     def __str__(self):
         return f"Approval for {self.training_session} by {self.head} for {self.department}"
 

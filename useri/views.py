@@ -925,11 +925,11 @@ def create_training(request):
     if request.method == 'POST':
         form = TrainingCreationForm(request.POST, request.FILES)
         external_trainer_form = ExternalTrainerForm(request.POST)
-
+        
         if form.is_valid() and (form.cleaned_data['trainer_type'] == 'Internal' or external_trainer_form.is_valid() or form.cleaned_data['venue_type'] == 'Online'):
             training_session = form.save(commit=False)
             trainer_type = form.cleaned_data['trainer_type']
-
+            
             if form.cleaned_data['venue_type'] == 'Online':
                 training_session.trainer = None  # No trainer required for online training
             elif trainer_type == 'External':
@@ -952,7 +952,7 @@ def create_training(request):
                             'email': internal_trainer.email,
                         }
                     )
-
+            
             training_session.created_by = request.user
             training_session.save()
             messages.success(request, "Training session has been created successfully.")
@@ -966,10 +966,8 @@ def create_training(request):
     trainings = TrainingSession.objects.all().order_by('-created_at')
 
     for training in trainings:
-        training.mark_as_completed()
-        if training.is_completed:
-            attendance_dates = AttendanceMaster.objects.filter(training_session=training).values_list('attendance_date', flat=True)
-            training.completion_date = max(attendance_dates) if attendance_dates else None
+        if training.attendance_frozen:
+            training.completion_date = training.date  # Use the training session date
         else:
             training.completion_date = None
 
@@ -984,6 +982,51 @@ def create_training(request):
         'trainers': trainers,
     })
 
+@login_required
+def mark_attendance(request, training_id):
+    training = get_object_or_404(TrainingSession, id=training_id)
+    
+    if request.method == 'POST':
+        attendees = request.POST.getlist('attendees')
+        action = request.POST.get('action')
+        
+        if action == 'save':
+            # Clear existing attendance records
+            AttendanceMaster.objects.filter(training_session=training).delete()
+            
+            for user_id in attendees:
+                user = CustomUser.objects.get(id=user_id)
+                AttendanceMaster.objects.create(
+                    custom_user=user,
+                    training_session=training,
+                    attendance_date=training.date  # Use the training's date
+                )
+            
+            messages.success(request, "Attendance has been marked successfully.")
+        
+        elif action == 'close':
+            training.attendance_frozen = True
+            training.save()
+            messages.success(request, "Attendance has been frozen and can no longer be edited.")
+        
+        return redirect('mark_attendance', training_id=training.id)
+    
+    if training.needs_hod_nomination:
+        participants = CustomUser.objects.filter(
+            selected_participants__training_session=training,
+            selected_participants__approved=True
+        )
+    else:
+        participants = training.selected_participants.all()
+    
+    # Get existing attendance records
+    existing_attendees = AttendanceMaster.objects.filter(training_session=training).values_list('custom_user_id', flat=True)
+    
+    return render(request, 'mark_attendance.html', {
+        'training': training,
+        'participants': participants,
+        'existing_attendees': existing_attendees,
+    })
 @login_required
 def send_training_request(request, pk):
     training = get_object_or_404(TrainingSession, pk=pk)
@@ -1191,7 +1234,10 @@ def list_and_finalize_trainings(request):
     user = request.user
     departments = user.headed_departments.all()
 
+    logger.info(f"User {user.username} accessing list_and_finalize_trainings")
+
     if not departments.exists():
+        logger.info(f"User {user.username} has no headed departments")
         return render(request, 'list_and_finalize_trainings.html', {'training_info': []})
 
     current_time = timezone.now()
@@ -1199,6 +1245,8 @@ def list_and_finalize_trainings(request):
         Q(selected_participants__user_departments__in=departments) |
         Q(department_counts__head=user)
     ).distinct().order_by('-date', '-from_time')
+
+    logger.info(f"Found {training_sessions.count()} training sessions for user {user.username}")
 
     training_info = []
 
@@ -1252,28 +1300,30 @@ def list_and_finalize_trainings(request):
             'department_heads': department_heads,
         })
 
+    logger.info(f"Prepared training_info for {len(training_info)} trainings")
+
     if request.method == 'POST':
         training_id = request.POST.get('training_id')
         action = request.POST.get('action')
         training = get_object_or_404(TrainingSession, pk=training_id)
+        
+        logger.info(f"Processing POST request - Training ID: {training_id}, Action: {action}")
+        logger.info(f"Raw POST data: {request.POST}")
+
         form = ParticipantsForm(request.POST, user=user, training=training)
 
-        logger.info(f"Received POST request for training ID: {training_id} with action: {action}")
-        logger.info(f"Form data: {request.POST}")
-
         if form.is_valid():
-            nominated_members_ids = request.POST.getlist('nominated_members')
-            nominated_associates_ids = request.POST.getlist('nominated_associates')
-            added_users_ids = request.POST.getlist('added_users')
+            nominated_members = form.cleaned_data['nominated_members']
+            nominated_associates = form.cleaned_data['nominated_associates']
             comment = request.POST.get('comment', '')
 
-            logger.info(f"Nominated Members IDs: {nominated_members_ids}")
-            logger.info(f"Nominated Associates IDs: {nominated_associates_ids}")
-            logger.info(f"Added Users IDs: {added_users_ids}")
+            logger.info(f"Nominated Members: {[m.id for m in nominated_members]}")
+            logger.info(f"Nominated Associates: {[a.id for a in nominated_associates]}")
 
-            nominated_members = CustomUser.objects.filter(id__in=nominated_members_ids)
-            nominated_associates = CustomUser.objects.filter(id__in=nominated_associates_ids)
-            added_participants = CustomUser.objects.filter(id__in=added_users_ids)
+            # Combine nominated members and associates
+            updated_selected_participants = set(nominated_members) | set(nominated_associates)
+
+            logger.info(f"Total updated participants: {len(updated_selected_participants)}")
 
             approval, created = TrainingApproval.objects.get_or_create(
                 training_session=training,
@@ -1285,39 +1335,51 @@ def list_and_finalize_trainings(request):
                     'comment': comment
                 }
             )
+
+            logger.info(f"TrainingApproval {'created' if created else 'updated'} - ID: {approval.id}")
+
             if not created:
                 if action == 'confirm_training':
                     approval.approved = True
                     approval.pending_approval = False
                 approval.comment = comment
+
+                # Log the current participants before updating
+                logger.info(f"Current participants before update: {[p.id for p in approval.selected_participants.all()]}")
+
+                # Update the approval's selected participants only if not confirming
+                if action != 'confirm_training':
+                    approval.selected_participants.set(updated_selected_participants)
                 approval.save()
 
-            # Combine nominated members, associates, and added participants
-            updated_selected_participants = set(nominated_members) | set(nominated_associates) | set(added_participants)
+                # Log the updated participants
+                logger.info(f"Updated participants after save: {[p.id for p in approval.selected_participants.all()]}")
 
-            logger.info(f"Updated Selected Participants (IDs): {list(updated_selected_participants)}")
-
-            # Update the approval's selected participants
-            approval.selected_participants.set(updated_selected_participants)
-
-            logger.info(f"TrainingApproval ID: {approval.id}")
-            logger.info(f"Selected Participants: {list(approval.selected_participants.all().values_list('username', flat=True))}")
+            # If confirming the training, update the main TrainingSession as well
+            if action == 'confirm_training':
+                logger.info("Confirming training and updating TrainingSession")
+                training.finalized = True
+                training.save()
+                logger.info(f"TrainingSession finalized: {training.finalized}")
 
             return JsonResponse({'success': True})
         else:
-            logger.error(f"Form validation failed: {form.errors}")
-            return JsonResponse({'success': False, 'error': form.errors})
+            logger.error(f"Form validation failed. Errors: {form.errors}")
+            logger.error(f"Form data: {form.data}")
+            logger.error(f"Form cleaned data: {form.cleaned_data}")
+            return JsonResponse({'success': False, 'error': str(form.errors)})
 
     else:
         form = ParticipantsForm(user=user, training=None)
 
-    return render(request, 'list_and_finalize_trainings.html', {
+    context = {
         'training_info': training_info,
         'form': form,
         'current_time': current_time,
         'approval_threshold_hours': APPROVAL_THRESHOLD_HOURS,
-    })
-    
+    }
+
+    return render(request, 'list_and_finalize_trainings.html', context)
     
 @login_required
 def get_department_participants(request, training_id):

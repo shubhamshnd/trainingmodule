@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+  <h2>Mark Attendance for {{ training.training_programme.title }}</h2>
+  <form method="post" id="attendance-form">
+    {% csrf_token %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Present</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for participant in participants %}
+          <tr>
+            <td>{{ participant.employee_name }}</td>
+            <td>
+              <input type="checkbox" name="attendees" value="{{ participant.id }}" {% if participant.id in existing_attendees %}checked{% endif %} {% if training.attendance_frozen %}disabled{% endif %}>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="d-flex justify-content-end">
+      <button type="submit" name="action" value="save" class="btn btn-success me-2" {% if training.attendance_frozen %}disabled{% endif %}>Save</button>
+      <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#confirmCloseModal" {% if training.attendance_frozen %}disabled{% endif %}>Close</button>
+      <a href="{% url 'create_training' %}" class="btn btn-secondary">Back</a>
+    </div>
+  </form>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="confirmCloseModal" tabindex="-1" aria-labelledby="confirmCloseModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmCloseModalLabel">Confirm Close Attendance</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to close attendance? Once closed, it cannot be edited.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning" id="confirmCloseButton">Yes, Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const confirmCloseButton = document.getElementById('confirmCloseButton');
+    confirmCloseButton.addEventListener('click', function() {
+      const attendanceForm = document.getElementById('attendance-form');
+      const actionInput = document.createElement('input');
+      actionInput.type = 'hidden';
+      actionInput.name = 'action';
+      actionInput.value = 'close';
+      attendanceForm.appendChild(actionInput);
+      attendanceForm.submit();
+    });
+  });
+</script>
+{% endblock %}

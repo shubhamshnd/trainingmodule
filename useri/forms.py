@@ -366,24 +366,12 @@ class ReasonForm(forms.Form):
     
 
 class ParticipantsForm(forms.Form):
-    available_employees = forms.ModelMultipleChoiceField(
+    nominated_members = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Available Employees", is_stacked=False),
-        required=False
-    )
-    available_associates = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Available Associates", is_stacked=False),
-        required=False
-    )
-    nominated_employees = forms.ModelMultipleChoiceField(
-        queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Nominated Employees", is_stacked=False),
         required=False
     )
     nominated_associates = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
-        widget=FilteredSelectMultiple("Nominated Associates", is_stacked=False),
         required=False
     )
 
@@ -392,35 +380,30 @@ class ParticipantsForm(forms.Form):
         training = kwargs.pop('training', None)
         super().__init__(*args, **kwargs)
 
+        logger.info(f"Initializing ParticipantsForm - User: {user}, Training: {training}")
+
         if user and training:
             departments = Department.objects.filter(head=user)
-            selected_participants_ids = training.selected_participants.values_list('id', flat=True)
-
-            available_employees_qs = CustomUser.objects.filter(
-                user_departments__in=departments
-            ).distinct().exclude(id__in=selected_participants_ids)
-
-            available_associates_qs = CustomUser.objects.filter(
-                associated_departments__in=departments
-            ).distinct().exclude(id__in=selected_participants_ids)
-
+            
             nominated_employees_qs = CustomUser.objects.filter(
-                id__in=selected_participants_ids, user_departments__in=departments
+                user_departments__in=departments
             ).distinct()
 
             nominated_associates_qs = CustomUser.objects.filter(
-                id__in=selected_participants_ids, associated_departments__in=departments
+                associated_departments__in=departments
             ).distinct()
 
-            self.fields['available_employees'].queryset = available_employees_qs
-            self.fields['available_associates'].queryset = available_associates_qs
-            self.fields['nominated_employees'].queryset = nominated_employees_qs
+            self.fields['nominated_members'].queryset = nominated_employees_qs
             self.fields['nominated_associates'].queryset = nominated_associates_qs
 
-            logger.info(f"Available Employees Queryset: {available_employees_qs.values_list('id', flat=True)}")
-            logger.info(f"Available Associates Queryset: {available_associates_qs.values_list('id', flat=True)}")
-            logger.info(f"Nominated Employees Queryset: {nominated_employees_qs.values_list('id', flat=True)}")
-            logger.info(f"Nominated Associates Queryset: {nominated_associates_qs.values_list('id', flat=True)}")
+            logger.info(f"Form initialization - User: {user.username}, Training: {training.id}")
+            logger.info(f"Nominated Members Queryset IDs: {list(nominated_employees_qs.values_list('id', flat=True))}")
+            logger.info(f"Nominated Associates Queryset IDs: {list(nominated_associates_qs.values_list('id', flat=True))}")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        logger.info(f"Form cleaning - Cleaned data: {cleaned_data}")
+        return cleaned_data
             
             
             

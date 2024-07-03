@@ -40,5 +40,6 @@ urlpatterns = [
     path('checker_finalize_trainings/', views.checker_finalize_trainings, name='checker_finalize_trainings'),
     path('get_training_details/<int:training_id>/', views.get_training_details, name='get_training_details'),
     path('get_checker_training_details/<int:training_id>/', views.get_checker_training_details, name='get_checker_training_details'),
+    path('mark-attendance/<int:training_id>/', views.mark_attendance, name='mark_attendance'),
 
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

@@ -285,11 +285,11 @@
             removedParticipants.forEach(function(userId) {
                 formData += `&removed_users=${userId}&reason_${userId}=${$(`input[name='reason_${userId}']`).val()}`;
             });
-    
+        
             addedParticipants.forEach(function(userId) {
                 formData += `&added_users=${userId}`;
             });
-    
+        
             $.ajax({
                 url: "{% url 'list_and_finalize_trainings' %}",
                 method: 'POST',
@@ -303,11 +303,11 @@
                         $('#add_associate').prop('disabled', true);
                         $('#remove_associate').prop('disabled', true);
                         $('#finalizeModal').modal('hide');
-    
+        
                         const row = $(`tr[data-training-id="${selectedTrainingId}"]`);
                         row.addClass('table-success');
                         row.find('td:last').text('Approved');
-    
+        
                         alert('Training confirmed successfully.');
                     } else {
                         alert('There was an error confirming the training.');
@@ -315,6 +315,7 @@
                 }
             });
         });
+        
     
         $('#save-button').on('click', function () {
             let formData = $('#participants-form').serialize() + '&action=save_changes';

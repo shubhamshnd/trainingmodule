@@ -99,12 +99,17 @@
                 {% endif %}
               </td>
               <td>
-                {% if training.is_completed %}
-                  Completed on {{ training.completion_date }}
-                {% else %}
-                  <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm">Schedule</a>
-                {% endif %}
-              </td>              
+                <div class="d-flex">
+                  {% if training.is_completed %}
+                    Completed on {{ training.date }}
+                  {% else %}
+                    <a href="{% url 'send_training_request' training.id %}" class="btn btn-primary btn-sm me-2">Schedule</a>
+                    {% if training.checker_finalized %}
+                      <a href="{% url 'mark_attendance' training.id %}" class="btn btn-success btn-sm">Attendance</a>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </td>
             </tr>
             {% endfor %}
           </tbody>

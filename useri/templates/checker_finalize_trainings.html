@@ -102,7 +102,6 @@
 <style>
     #pre-assigned-table th,
     #needs-nomination-table th {
-        
         word-wrap: break-word;
     }
 </style>
@@ -113,8 +112,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         let selectedTrainingId = null;
         let allHeadsApproved = true;
-        let confirmOverride = false;
-
+    
         function updateTrainingDetails(trainingId) {
             $.ajax({
                 url: "{% url 'get_checker_training_details' 0 %}".replace('0', trainingId),
@@ -126,67 +124,72 @@
                     needsNominationTbody.empty();
                     allHeadsApproved = true;
                     let headsPendingApproval = [];
-                    
+    
+                    console.log('Training details:', data);
+    
                     let isNeedsNomination = data.some(dept => dept.type === 'Needs Nomination');
                     $('#pre-assigned-table').toggle(!isNeedsNomination);
                     $('#needs-nomination-table').toggle(isNeedsNomination);
-        
+    
                     data.forEach(department => {
                         if (department.type === 'Needs Nomination' && (department.required_employees > 0 || department.required_associates > 0)) {
                             let row = $('<tr></tr>');
                             row.append('<td>' + department.head.employee_name + '</td>');
                             row.append('<td>' + department.required_employees + '</td>');
                             row.append('<td>' + department.required_associates + '</td>');
-        
+    
                             let addedParticipants = department.added_participants.map(p => '<p>' + p.employee_name + '</p>').join('');
                             row.append('<td>' + addedParticipants + '</td>');
                             row.append('<td>' + department.total_added + '</td>');
-        
+    
                             row.append('<td>' + (department.approved ? 'Yes' : 'No') + '</td>');
                             row.append('<td>' + (department.reason ? department.reason : '-') + '</td>');
-        
+    
                             if (!department.approved) {
                                 allHeadsApproved = false;
                                 headsPendingApproval.push(department.head.employee_name);
                             }
-        
+    
                             needsNominationTbody.append(row);
-                        } else {
+                        } else if (department.type === 'Pre-assigned') {
                             let row = $('<tr></tr>');
                             row.append('<td>' + department.head.employee_name + '</td>');
-        
+    
                             let originalParticipants = department.original_participants.map(p => '<p>' + p.employee_name + '</p>').join('');
                             row.append('<td>' + originalParticipants + '</td>');
                             row.append('<td>' + (department.approved ? 'Yes' : 'No') + '</td>');
                             row.append('<td>' + (department.reason ? department.reason : '-') + '</td>');
-        
+    
                             if (!department.approved) {
                                 allHeadsApproved = false;
                                 headsPendingApproval.push(department.head.employee_name);
                             }
-        
+    
                             preAssignedTbody.append(row);
                         }
                     });
-        
+    
                     $('#heads-pending-approval').text(
                         allHeadsApproved ? '' : 'Heads pending approval: ' + headsPendingApproval.join(', ')
                     );
-        
+    
                     // Check if the training is already finalized
                     let isFinalized = data.some(dept => dept.checker_finalized);
-                    $('#finalize-button').prop('disabled', !allHeadsApproved && !confirmOverride || isFinalized);
+                    $('#finalize-button').prop('disabled', !allHeadsApproved || isFinalized);
+                },
+                error: function (xhr, status, error) {
+                    console.error('Failed to fetch training details:', error);
                 }
             });
         }
-
+    
         $('.training-row').on('click', function () {
             $('.training-row').removeClass('table-primary');
             $(this).addClass('table-primary');
             selectedTrainingId = $(this).data('training-id');
             updateTrainingDetails(selectedTrainingId);
         });
-
+    
         $('#confirm-finalize-button').on('click', function () {
             $.ajax({
                 url: "{% url 'checker_finalize_trainings' %}",
@@ -204,10 +207,13 @@
                     } else {
                         alert('There was an error finalizing the training.');
                     }
+                },
+                error: function (xhr, status, error) {
+                    console.error('Failed to finalize training:', error);
                 }
             });
         });
-
+    
         $('#finalize-button').on('click', function () {
             $('#finalizeModal').modal('show');
         });
