@@ -31,6 +31,24 @@ def easter_egg_page(request):
     return render(request, 'easter_egg.html', context)
 logger = logging.getLogger(__name__)
 
+def attendance_view(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        try:
+            user = CustomUser.objects.get(username=username)
+            attendance_records = AttendanceMaster.objects.filter(custom_user=user).select_related('training_session')
+            training_sessions = [
+                {
+                    'title': record.training_session.training_programme.title if record.training_session.training_programme else record.training_session.custom_training_programme,
+                    'date': record.attendance_date,
+                }
+                for record in attendance_records
+            ]
+            return JsonResponse({'status': 'success', 'training_sessions': training_sessions})
+        except CustomUser.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'User not found.'})
+    return render(request, 'attendance_form.html')
+
 @csrf_protect
 @login_required
 def home(request):
@@ -51,12 +69,14 @@ def home(request):
         'attended_sessions': attended_sessions,
         'feedback_sessions_ids': feedback_sessions_ids,
     }
-    
+
     response = render(request, 'home.html', context)
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
     return response
+
+
 
 
 @login_required

@@ -28,6 +28,10 @@ DEBUG = True
 ALLOWED_HOSTS = ['10.5.52.49', '127.0.0.1','localhost']
 
 
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+
 # Application definition
 
 INSTALLED_APPS = [

@@ -116,7 +116,7 @@
               <a class="nav-link" href="{% url 'maker_check_requests' %}">Approved Requests</a>
             </li>
           {% endif %}
-          {% if not user.is_checker and not is_superior and not user.is_maker %}
+          {% if not user.is_checker and not is_superior %}
             <li class="nav-item {% if request.resolver_match.view_name == 'request_training' %}active{% endif %}">
               <a class="nav-link" href="{% url 'request_training' %}">Request Courses</a>
             </li>
