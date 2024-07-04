@@ -286,6 +286,7 @@ def assign_superior(request):
     else:
         return redirect('request_training')
 #------------------------------------------------------------------------------------------------------------------------------------@login_required@login_required
+@login_required
 def superior_check_requests(request):
     user = request.user
 
@@ -340,7 +341,70 @@ def superior_check_requests(request):
         form = TrainingRequestApprovalForm(request.POST)
         assignment_form = SuperiorAssignmentForm(request.POST, superior_user=user)
 
-        if form.is_valid():
+        if 'assigned_users' in request.POST or 'include_self' in request.POST:  # This indicates it's a new assignment/request
+            if assignment_form.is_valid():
+                assigned_users = assignment_form.cleaned_data.get('assigned_users', [])
+                include_self = assignment_form.cleaned_data.get('include_self', False)
+                training_programme = assignment_form.cleaned_data.get('training_programme')
+                other_training = assignment_form.cleaned_data.get('other_training')
+                hod_comment = assignment_form.cleaned_data.get('hod_comment')
+
+                # Check if the superior selected themselves
+                if include_self:
+                    # Create RequestTraining for the superior
+                    top_authority = CustomUser.objects.filter(is_top_authority=True).first()
+                    request_training = RequestTraining.objects.create(
+                        custom_user=user,
+                        training_programme=training_programme,
+                        other_training=other_training,
+                        user_comment=hod_comment,
+                        current_approver=top_authority,
+                        is_approved=False
+                    )
+                    logger.info(f"Superior {user.username} created self RequestTraining, current approver: {top_authority.username if top_authority else 'None'}")
+
+                # Create SuperiorAssignedTraining for other users
+                if assigned_users:
+                    superior_assignment = SuperiorAssignedTraining(
+                        assigned_by=user,
+                        department=headed_departments.first(),
+                        training_programme=training_programme,
+                        other_training=other_training,
+                        hod_comment=hod_comment,
+                    )
+                    superior_assignment.save()
+                    superior_assignment.assigned_users.set(assigned_users)
+
+                    # Set current approver to the immediate superior of the assigner
+                    next_approver, parent_dept_name = find_next_approver(user)
+                    if next_approver:
+                        superior_assignment.current_approver = next_approver
+                        superior_assignment.is_approved = False
+                        logger.info(f"Superior assignment {superior_assignment.id} assigned by {user.username}. Next approver: {next_approver.username}, Department: {parent_dept_name}")
+                    else:
+                        superior_assignment.current_approver = None
+                        superior_assignment.is_approved = True
+                        superior_assignment.final_approval_timestamp = timezone.now()
+                        logger.info(f"Superior assignment {superior_assignment.id} assigned by {user.username}. No further approvers.")
+                    superior_assignment.save()
+
+                    for assigned_user in assigned_users:
+                        Approval.objects.create(
+                            superior_assignment=superior_assignment,
+                            approver=user,
+                            comment=hod_comment,
+                            approval_timestamp=timezone.now(),
+                            action='assign'
+                        )
+
+                messages.success(request, "Training has been assigned successfully.")
+                logger.info(f"Training assigned by {user.username} to {', '.join([u.username for u in assigned_users]) if assigned_users else 'self'}.")
+                return redirect('superior_check_requests')
+            else:
+                messages.error(request, "Invalid form submission. Please check the form and try again.")
+                logger.error(f"Invalid assignment form submission by {user.username}. Errors: {assignment_form.errors}")
+
+        elif form.is_valid():
             request_id = form.cleaned_data.get('request_id')
             assignment_id = form.cleaned_data.get('assignment_id')
             hod_comment = form.cleaned_data.get('hod_comment')
@@ -372,6 +436,7 @@ def superior_check_requests(request):
                     training_request.save()
                 elif action == 'reject':
                     training_request.is_rejected = True
+                    training_request.is_approved = False
                     training_request.current_approver = None
                     training_request.final_approval_timestamp = approval_timestamp
                     logger.info(f"Training request {training_request.id} rejected by {request.user.username}.")
@@ -410,6 +475,7 @@ def superior_check_requests(request):
                     superior_assignment.save()
                 elif action == 'reject':
                     superior_assignment.is_rejected = True
+                    superior_assignment.is_approved = False
                     superior_assignment.current_approver = None
                     superior_assignment.final_approval_timestamp = approval_timestamp
                     Approval.objects.create(
@@ -424,49 +490,9 @@ def superior_check_requests(request):
 
             messages.success(request, "Training request has been processed successfully.")
             return redirect('superior_check_requests')
-
-        elif assignment_form.is_valid():
-            assigned_users = assignment_form.cleaned_data.get('assigned_users')
-            training_programme = assignment_form.cleaned_data.get('training_programme')
-            other_training = assignment_form.cleaned_data.get('other_training')
-            hod_comment = assignment_form.cleaned_data.get('hod_comment')
-
-            superior_assignment = SuperiorAssignedTraining(
-                assigned_by=user,
-                department=headed_departments.first(),
-                training_programme=training_programme,
-                other_training=other_training,
-                hod_comment=hod_comment,
-            )
-            superior_assignment.save()
-            superior_assignment.assigned_users.set(assigned_users)
-
-            # Set current approver to the immediate superior of the assigner
-            next_approver, parent_dept_name = find_next_approver(user)
-            if next_approver:
-                superior_assignment.current_approver = next_approver
-                logger.info(f"Superior assignment {superior_assignment.id} assigned by {user.username}. Next approver: {next_approver.username}, Department: {parent_dept_name}")
-            else:
-                superior_assignment.current_approver = None
-                superior_assignment.is_approved = True
-                superior_assignment.final_approval_timestamp = timezone.now()
-                logger.info(f"Superior assignment {superior_assignment.id} assigned by {user.username}. No further approvers.")
-            superior_assignment.save()
-
-            for assigned_user in assigned_users:
-                Approval.objects.create(
-                    superior_assignment=superior_assignment,
-                    approver=user,
-                    comment=hod_comment,
-                    approval_timestamp=timezone.now(),
-                    action='assign'
-                )
-
-            messages.success(request, "Training has been assigned successfully.")
-            logger.info(f"Training assigned by {user.username} to {', '.join([u.username for u in assigned_users])}.")
-            return redirect('superior_check_requests')
         else:
             messages.error(request, "Invalid form submission. Please try again.")
+            logger.error(f"Invalid form submission by {user.username}. Errors: {form.errors}")
     else:
         form = TrainingRequestApprovalForm()
         assignment_form = SuperiorAssignmentForm(superior_user=user)
@@ -486,7 +512,6 @@ def superior_check_requests(request):
         'is_final_approver': is_final_approver,
         'parent_department_heads': parent_department_heads,
     })
-
 
 def find_next_approver(current_approver):
     if not current_approver:

@@ -31,10 +31,39 @@
             flex-grow: 1;
             overflow-y: auto;
         }
-        #qrVideo {
+        #cameraContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+            width: 300px;
+            height: 300px;
+            overflow: hidden;
+        }
+        #cameraBox {
             width: 100%;
-            max-width: 400px;
+            height: 100%;
+            border: 2px solid #007bff;
+            overflow: hidden;
+            position: relative;
+        }
+        #qrVideo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
             height: auto;
+        }
+        #qrCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
         }
     </style>
 </head>
@@ -60,7 +89,12 @@
                             <select id="cameraSelect" class="form-select mb-2" style="display: none;">
                                 <!-- Camera options will be added here -->
                             </select>
-                            <video id="qrVideo" style="display: none;"></video>
+                            <div id="cameraContainer" style="display: none;">
+                                <div id="cameraBox">
+                                    <video id="qrVideo" playsinline></video>
+                                </div>
+                                <canvas id="qrCanvas" style="display: none;"></canvas>
+                            </div>
                         </div>
 
                         <div id="resultSection" class="flex-grow-1 d-flex flex-column" style="display: none;">
@@ -85,7 +119,6 @@
         </div>
     </div>
 
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.getElementById('attendanceForm').addEventListener('submit', fetchAttendance);
@@ -93,6 +126,8 @@
 
         let videoElem = document.getElementById('qrVideo');
         let cameraSelect = document.getElementById('cameraSelect');
+        let cameraContainer = document.getElementById('cameraContainer');
+        let qrCanvas = document.getElementById('qrCanvas');
         let scanning = false;
 
         function fetchAttendance(event) {
@@ -117,6 +152,15 @@
             });
         }
 
+        function getBackCamera(devices) {
+            const backCameraKeywords = ['back', 'rear', 'environment'];
+            return devices.find(device => 
+                backCameraKeywords.some(keyword => 
+                    device.label.toLowerCase().includes(keyword)
+                )
+            ) || devices[devices.length - 1]; // Default to last camera if no match
+        }
+
         async function startQRScanner() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -131,9 +175,15 @@
                 });
 
                 cameraSelect.style.display = 'block';
-                videoElem.style.display = 'block';
+                cameraContainer.style.display = 'flex';
 
                 cameraSelect.addEventListener('change', startScanning);
+
+                const backCamera = getBackCamera(videoDevices);
+                if (backCamera) {
+                    cameraSelect.value = backCamera.deviceId;
+                }
+
                 await startScanning();
             } catch (error) {
                 console.error('Error accessing camera:', error);
@@ -144,10 +194,15 @@
         async function startScanning() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { deviceId: cameraSelect.value }
+                    video: { 
+                        deviceId: cameraSelect.value ? { exact: cameraSelect.value } : undefined,
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 });
                 videoElem.srcObject = stream;
-                videoElem.play();
+                await videoElem.play();
                 scanning = true;
                 scanQRCode();
             } catch (error) {
@@ -158,12 +213,21 @@
 
         function scanQRCode() {
             if (videoElem.readyState === videoElem.HAVE_ENOUGH_DATA) {
-                const canvas = document.createElement('canvas');
-                canvas.width = videoElem.videoWidth;
-                canvas.height = videoElem.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                qrCanvas.width = cameraContainer.offsetWidth;
+                qrCanvas.height = cameraContainer.offsetHeight;
+                const ctx = qrCanvas.getContext('2d');
+
+                // Calculate the scaling factor
+                const scale = Math.min(qrCanvas.width / videoElem.videoWidth, qrCanvas.height / videoElem.videoHeight);
+                const videoWidth = videoElem.videoWidth * scale;
+                const videoHeight = videoElem.videoHeight * scale;
+                const xOffset = (qrCanvas.width - videoWidth) / 2;
+                const yOffset = (qrCanvas.height - videoHeight) / 2;
+
+                // Draw the video frame onto the canvas
+                ctx.drawImage(videoElem, xOffset, yOffset, videoWidth, videoHeight);
+
+                const imageData = ctx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
 
                 if (code) {
@@ -184,7 +248,7 @@
             if (videoElem.srcObject) {
                 videoElem.srcObject.getTracks().forEach(track => track.stop());
             }
-            videoElem.style.display = 'none';
+            cameraContainer.style.display = 'none';
             cameraSelect.style.display = 'none';
         }
 

@@ -37,8 +37,7 @@
                             {% for department in assignment_form.get_hierarchical_departments %}
                                 <li>
                                     <strong>{{ department.department.name }}</strong> 
-                                    - <input type="checkbox" name="assigned_users" value="{{ department.department.head.id }}"> 
-                                    Head: {{ department.department.head.employee_name }} - {{ department.department.head.username }}
+                                    - Head: {{ department.department.head.employee_name }} - {{ department.department.head.username }}
                                     <ul>
                                         {% for member in department.members %}
                                             <li>
@@ -50,6 +49,10 @@
                             {% endfor %}
                         </ul>
                     </div>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="include_self" name="include_self">
+                    <label class="form-check-label" for="include_self">Self Training</label>
                 </div>
                 <div class="mb-3">
                     <label for="training_programme" class="form-label">Select Training Programme</label>

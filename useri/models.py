@@ -106,6 +106,7 @@ class CustomUser(AbstractUser):
     can_assign_trainings = models.BooleanField(default=False)
     is_maker = models.BooleanField(default=False)
     is_checker = models.BooleanField(default=False)
+    is_top_authority = models.BooleanField(default=False)
 
     # Foreign key to Role model
     role = models.ForeignKey(Role, on_delete=models.CASCADE)

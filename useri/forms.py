@@ -67,8 +67,9 @@ class SuperiorAssignmentForm(forms.ModelForm):
     assigned_users = forms.ModelMultipleChoiceField(
         queryset=CustomUser.objects.none(),
         widget=forms.CheckboxSelectMultiple,
-        required=True,
+        required=False,  # Changed to False to allow self-assignment only
     )
+    include_self = forms.BooleanField(required=False, initial=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
 
     class Meta:
         model = SuperiorAssignedTraining
@@ -86,7 +87,7 @@ class SuperiorAssignmentForm(forms.ModelForm):
             self.superior_user = superior_user
             self.fields['assigned_users'].queryset = CustomUser.objects.filter(
                 user_departments__in=self.get_all_headed_departments(superior_user)
-            ).distinct()
+            ).exclude(id=superior_user.id).distinct()
             self.fields['assigned_users'].label_from_instance = self.label_from_instance
         self.fields['training_programme'].queryset = TrainingProgramme.objects.all()
         self.fields['training_programme'].required = False
@@ -99,9 +100,15 @@ class SuperiorAssignmentForm(forms.ModelForm):
         cleaned_data = super().clean()
         training_programme = cleaned_data.get("training_programme")
         other_training = cleaned_data.get("other_training")
+        assigned_users = cleaned_data.get("assigned_users")
+        include_self = cleaned_data.get("include_self")
 
         if not training_programme and not other_training:
             raise forms.ValidationError("You must select a training programme or specify another training.")
+
+        if not assigned_users and not include_self:
+            raise forms.ValidationError("You must either select users or include yourself for the training.")
+
         return cleaned_data
 
     def get_all_headed_departments(self, superior_user):
@@ -510,3 +517,28 @@ class FeedbackForm(forms.ModelForm):
             'programme_title': forms.TextInput(attrs={'readonly': 'readonly'}),
             'faculty': forms.TextInput(attrs={'readonly': 'readonly'}),
         }
+        
+        
+# In forms.py
+
+class SuperiorSelfTrainingForm(forms.Form):
+    training_programme = forms.ModelChoiceField(queryset=TrainingProgramme.objects.all(), required=False)
+    other_training = forms.CharField(max_length=255, required=False)
+    hod_comment = forms.CharField(widget=forms.Textarea, required=False)
+    assigned_users = forms.ModelMultipleChoiceField(queryset=CustomUser.objects.all(), required=False)
+    include_self = forms.BooleanField(required=False)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        training_programme = cleaned_data.get('training_programme')
+        other_training = cleaned_data.get('other_training')
+        assigned_users = cleaned_data.get('assigned_users')
+        include_self = cleaned_data.get('include_self')
+
+        if not training_programme and not other_training:
+            raise forms.ValidationError("Either select a training programme or specify other training.")
+
+        if not assigned_users and not include_self:
+            raise forms.ValidationError("Please select users or include yourself for the training.")
+
+        return cleaned_data
