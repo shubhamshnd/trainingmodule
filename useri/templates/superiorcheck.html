@@ -44,6 +44,11 @@
                                                 <input type="checkbox" name="assigned_users" value="{{ member.id }}"> {{ member.employee_name }} - {{ member.username }}
                                             </li>
                                         {% endfor %}
+                                        {% for associate in department.associates %}
+                                            <li>
+                                                <input type="checkbox" name="assigned_users" value="{{ associate.id }}"> {{ associate.employee_name }} - {{ associate.username }}
+                                            </li>
+                                        {% endfor %}
                                     </ul>
                                 </li>
                             {% endfor %}

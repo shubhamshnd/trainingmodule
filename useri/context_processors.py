@@ -10,10 +10,12 @@ def user_context(request):
             user_departments = user.departments.all()
             headed_departments = user.headed_departments.all()
             is_superior = headed_departments.exists()
+            is_top_authority = user.is_top_authority
             return {
                 'user_departments': user_departments,
                 'headed_departments': headed_departments,
                 'is_superior': is_superior,
+                'is_top_authority': is_top_authority,
             }
         except CustomUser.DoesNotExist:
             logger.error(f"CustomUser matching query does not exist.")

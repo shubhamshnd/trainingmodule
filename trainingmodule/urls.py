@@ -43,5 +43,6 @@ urlpatterns = [
     path('mark-attendance/<int:training_id>/', views.mark_attendance, name='mark_attendance'),
     path('feedback/<int:session_id>/', views.feedback_form, name='feedback_form'),
     path('attendance/', views.attendance_view, name='attendance_view'),
+    path('top_authority_requests/', views.top_authority_requests, name='top_authority_requests'),
 
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

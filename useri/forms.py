@@ -118,25 +118,29 @@ class SuperiorAssignmentForm(forms.ModelForm):
             for sub_dept in sub_departments:
                 all_departments.extend(get_sub_departments(sub_dept))
             return all_departments
-        
+
         all_departments = []
         for department in superior_user.headed_departments.all():
             all_departments.extend(get_sub_departments(department))
-        
+
         return all_departments
 
     def get_hierarchical_departments(self):
         def get_sub_departments(department):
-            hierarchy = [{'department': department, 'members': department.members.all()}]
+            hierarchy = [{
+                'department': department,
+                'members': department.members.all(),
+                'associates': department.associates.all()
+            }]
             sub_departments = department.sub_departments.all()
             for sub_dept in sub_departments:
                 hierarchy.extend(get_sub_departments(sub_dept))
             return hierarchy
-        
+
         hierarchical_departments = []
         for department in self.superior_user.headed_departments.all():
             hierarchical_departments.extend(get_sub_departments(department))
-        
+
         return hierarchical_departments
     
     

@@ -76,6 +76,49 @@ def home(request):
     response['Expires'] = '0'
     return response
 
+@login_required
+def top_authority_requests(request):
+    if not request.user.is_top_authority:
+        messages.error(request, "You are not authorized to access this page.")
+        return redirect('home')
+
+    user_requests = RequestTraining.objects.filter(current_approver=request.user).order_by('-request_date')
+
+    if request.method == 'POST':
+        form = TrainingRequestApprovalForm(request.POST)
+        if form.is_valid():
+            request_id = form.cleaned_data.get('request_id')
+            hod_comment = form.cleaned_data.get('hod_comment')
+            action = form.cleaned_data.get('action')
+
+            training_request = get_object_or_404(RequestTraining, id=request_id)
+            training_request.hod_comment = hod_comment
+            approval_timestamp = timezone.now()
+
+            if action == 'approve':
+                training_request.is_approved = True
+                training_request.final_approval_timestamp = approval_timestamp
+                training_request.current_approver = None
+                training_request.save()
+                messages.success(request, f"Request {training_request.id} approved successfully.")
+            elif action == 'reject':
+                training_request.is_rejected = True
+                training_request.is_approved = False
+                training_request.current_approver = None
+                training_request.final_approval_timestamp = approval_timestamp
+                training_request.save()
+                messages.success(request, f"Request {training_request.id} rejected successfully.")
+            return redirect('top_authority_requests')
+        else:
+            messages.error(request, "Invalid form submission. Please try again.")
+    else:
+        form = TrainingRequestApprovalForm()
+
+    context = {
+        'user_requests': user_requests,
+        'form': form,
+    }
+    return render(request, 'top_authority_requests.html', context)
 
 
 
