@@ -5,89 +5,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        html, body {
+        body, html {
             height: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
         }
         .container {
             display: flex;
+            height: 100%;
+        }
+        .login-form {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
             justify-content: center;
-            align-items: center; /* Center vertically */
-            height: 100%;
-        }
-        .login-container {
-            max-width: 400px;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-            height: 100%;
-        }
-        .login-image-container {
-            position: relative;
-            width: 100%;
-            border-top-right-radius: 10px;
-            border-bottom-right-radius: 10px;
-            height: 100%;
+            align-items: center;  /* Added this line */
         }
         .login-image {
-            width: 100%;
-            height: 100%;
-            display: block;
+            flex: 1;
+            background-image: url('{% static "img/stevejobs.webp" %}');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
-        .quote {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            background-color: rgba(255, 255, 255, 0.7);
+        .login-image img {
+            max-width: 80%;
+            max-height: 80%;
+        }
+        .logo {
+            max-width: 400px;
+            margin-bottom: 20px;
+            display: block;  /* Added this line */
+            margin-left: auto;  /* Added this line */
+            margin-right: auto;  /* Added this line */
+        }
+        h1 {
+            color: #4338CA;
+            margin-bottom: 40px;
+            text-align: center;  /* Added this line */
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            width: 100%;  /* Added this line */
+        }
+        input {
+            margin-bottom: 20px;
             padding: 10px;
+            border: 1px solid #D1D5DB;
             border-radius: 5px;
-            text-align: center;
-            font-style: italic;
+        }
+        button {
+            background-color: #4338CA;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .social-links {
+            margin-top: 20px;
+        }
+        .social-links a {
+            margin-right: 10px;
+            color: #6B7280;
+            text-decoration: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="row">
-            <div class="col-md-6 mx-auto">
-                <div class="login-container">
-                    <img src="{% static 'img/logo3.png' %}" style="width: 300px; height: 50px; display: block; margin-left: auto; margin-right: auto;" alt="Tlogo" class="logo">
-
-                    <h5 class="text-center mb-4">Training Management Application</h5>
-                    <form method="post">
-                        {% csrf_token %}
-
-                        <div class="form-group">
-                            <label for="username">Username:</label>
-                            <input type="text" class="form-control" id="username" name="username" value="{{ username }}">
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Password:</label>
-                            <input type="password" class="form-control" id="password" name="password">
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">Login</button>
-                        <br>
-                        {% for message in messages %}
-                        <div class="alert alert-danger" role="alert">
-                            {{ message }}
-                        </div>
-                        {% endfor %}
-                    </form>
-                </div>
-            </div>
-            <div class="col-md-6 d-none d-md-block">
-                <div class="login-image-container">
-                    <img src="{% static 'img/stevejobs.jpg' %}" alt="Training Image" class="login-image">
-                    <div class="quote">
-                        <p>"The only way to do great work is to love what you do."</p>
-                        <p>- Steve Jobs</p>
-                    </div>
-                </div>
-            </div>
+        <div class="login-form">
+            <img src="{% static 'img/logo.png' %}" alt="logo" class="logo">
+            <h1>Welcome!</h1>
+            <form method="post">
+                {% csrf_token %}
+                <input type="text" id="username" name="username" placeholder="Username" required>
+                <input type="password" id="password" name="password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+        <div class="login-image">
+            <!-- You can replace this with an actual image if desired -->
         </div>
     </div>
 </body>

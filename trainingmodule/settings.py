@@ -25,9 +25,9 @@ SECRET_KEY = 'django-insecure-xp#d612y%u^!#320&s_y_c47@v8xl2m#ym0p(jk4gd)1_iwnui
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['10.5.52.49', '127.0.0.1','localhost']
+ALLOWED_HOSTS = ['10.5.52.49', '127.0.0.1','localhost','8c86-125-19-176-186.ngrok-free.app']
 
-
+CSRF_TRUSTED_ORIGINS = ['http://10.5.52.49:8000/']
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_SECURE = False
 CSRF_COOKIE_HTTPONLY = False

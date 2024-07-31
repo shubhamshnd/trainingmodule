@@ -22,23 +22,7 @@
             </div>
         </div>
 
-        <div class="modal fade" id="commentModal" tabindex="-1" aria-labelledby="commentModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="commentModalLabel">Provide Comment</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="checker_comment" class="form-label">Comment</label>
-                            <textarea name="checker_comment" class="form-control" rows="4" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Submit</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Comment Modal (unchanged) -->
 
         <div style="max-height: 90vh; overflow-y: auto; margin-top: 20px;">
             <table class="table table-sm" style="font-size: 0.875rem;">
@@ -50,59 +34,41 @@
                         <th scope="col" class="text-nowrap">Source</th>
                         <th scope="col" class="text-nowrap">Assigned By</th>
                         <th scope="col" class="text-nowrap">Date</th>
-
                     </tr>
                 </thead>
                 <tbody>
                     {% for request in combined_requests %}
-                    <tr class="text-center {% if request.status and request.status.name == 'CKRapproved' %}table-success{% elif request.status and request.status.name == 'CKRrejected' %}table-danger{% endif %}">
-                        <td><input type="checkbox" name="selected_requests" value="{{ request.id }}"></td>
+                    <tr class="text-center {% if request.request.status and request.request.status.name == 'CKRapproved' %}table-success{% elif request.request.status and request.request.status.name == 'CKRrejected' %}table-danger{% endif %}">
+                        <td><input type="checkbox" name="selected_requests" value="{{ request.request.id }}"></td>
                         <td class="text-nowrap">
-                            {% if request|is_instance:'RequestTraining' %}
-                                {{ request.custom_user.employee_name }}
+                            {{ request.user.employee_name }}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if request.user.department %}
+                                {{ request.user.department.name }}
                             {% else %}
-                                {% for user in request.assigned_users.all %}
-                                    {{ user.employee_name }}<br>
-                                {% endfor %}
+                                N/A
                             {% endif %}
                         </td>
                         <td class="text-nowrap">
-                            {% if request|is_instance:'RequestTraining' %}
-                                {% if request.custom_user.department %}
-                                    {{ request.custom_user.department.name }}
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            {% else %}
-                                {% if request.department %}
-                                    {{ request.department.name }}
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            {% endif %}
-                        </td>
-                        <td class="text-nowrap">
-                            {% if request|is_instance:'RequestTraining' %}
+                            {% if request.user_requested and request.hod_assigned %}
+                                User Requested & HOD Assigned
+                            {% elif request.user_requested %}
                                 User Requested
-                            {% else %}
+                            {% elif request.hod_assigned %}
                                 HOD Assigned
                             {% endif %}
                         </td>
                         <td class="text-nowrap">
-                            {% if request|is_instance:'SuperiorAssignedTraining' %}
+                            {% if request.assigned_by %}
                                 {{ request.assigned_by.employee_name }}
                             {% else %}
                                 -
                             {% endif %}
                         </td>
                         <td class="text-nowrap">
-                            {% if request|is_instance:'RequestTraining' %}
-                                {{ request.request_date }}
-                            {% else %}
-                                {{ request.created_at }}
-                            {% endif %}
+                            {{ request.date }}
                         </td>
-
                     </tr>
                     {% endfor %}
                 </tbody>

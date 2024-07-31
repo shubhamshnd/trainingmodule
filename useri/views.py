@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login
-from django.contrib.auth import logout
+from django.contrib.auth import logout , authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Feedback, DepartmentCount ,CustomUser, RequestTraining, Status, HODTrainingAssignment ,  VenueMaster, TrainerMaster , TrainingSession , AttendanceMaster , Approval ,SuperiorAssignedTraining , Department , TrainingProgramme , TrainingApproval
@@ -13,7 +13,7 @@ from itertools import chain
 from collections import defaultdict
 from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
-from django.db.models import Q , F , Max
+from django.db.models import Q , F , Max ,Avg ,  Case, When, FloatField , Prefetch
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.http import JsonResponse
@@ -22,6 +22,292 @@ import pytz
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 import json
+from django.db.models.functions import TruncMonth
+
+import csv
+from django.shortcuts import render
+from django.db.models import Count, Avg, F, Sum
+
+from django.core.serializers.json import DjangoJSONEncoder
+from .models import TrainingSession, RequestTraining, SuperiorAssignedTraining, CustomUser, Department, Feedback, AttendanceMaster
+from datetime import datetime, timedelta ,date
+import json
+from dateutil.relativedelta import relativedelta
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.utils import get_column_letter
+class CustomJSONEncoder(DjangoJSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, timezone.datetime):
+            return obj.strftime('%Y-%m-%d')
+        return super().default(obj)
+
+def dashboard(request):
+    try:
+        current_date = timezone.now().date()
+        current_month_start = current_date.replace(day=1)
+        previous_month_start = (current_month_start - relativedelta(months=1))
+
+        def get_month_change(queryset, date_field):
+            current_month = queryset.filter(**{f'{date_field}__gte': current_month_start}).count()
+            previous_month = queryset.filter(**{
+                f'{date_field}__gte': previous_month_start,
+                f'{date_field}__lt': current_month_start
+            }).count()
+            return current_month - previous_month
+
+        # Total counts and month-over-month changes
+        total_training_sessions = TrainingSession.objects.count()
+        training_sessions_change = get_month_change(TrainingSession.objects, 'date')
+
+        total_request_trainings = RequestTraining.objects.count()
+        request_trainings_change = get_month_change(RequestTraining.objects, 'request_date')
+
+        total_superior_assigned_trainings = SuperiorAssignedTraining.objects.count()
+        superior_assigned_trainings_change = get_month_change(SuperiorAssignedTraining.objects, 'created_at')
+
+        # Training Sessions per month (all time)
+        sessions_per_month = TrainingSession.objects.annotate(month=TruncMonth('date'))\
+            .values('month')\
+            .annotate(count=Count('id'))\
+            .order_by('month')
+
+        # Top 5 most requested training programmes
+        top_requested_trainings = RequestTraining.objects.values('training_programme__title')\
+            .annotate(count=Count('id'))\
+            .order_by('-count')[:5]
+
+        # Department-wise training participation
+        department_participation = Department.objects.annotate(
+            participant_count=Count('members__selected_trainings', distinct=True)
+        ).values('name', 'participant_count').order_by('-participant_count')[:5]
+
+        # Request Trainings per month (all time)
+        requests_per_month = RequestTraining.objects.annotate(month=TruncMonth('request_date'))\
+            .values('month')\
+            .annotate(count=Count('id'))\
+            .order_by('month')
+
+        dashboard_data = {
+            'total_training_sessions': total_training_sessions,
+            'training_sessions_change': training_sessions_change,
+            'total_request_trainings': total_request_trainings,
+            'request_trainings_change': request_trainings_change,
+            'total_superior_assigned_trainings': total_superior_assigned_trainings,
+            'superior_assigned_trainings_change': superior_assigned_trainings_change,
+            'sessions_per_month': list(sessions_per_month),
+            'top_requested_trainings': list(top_requested_trainings),
+            'department_participation': list(department_participation),
+            'requests_per_month': list(requests_per_month),
+        }
+
+        return render(request, 'dashboard.html', {
+            'dashboard_data': json.dumps(dashboard_data, cls=CustomJSONEncoder)
+        })
+    except Exception as e:
+        print(f"Error in dashboard view: {e}")
+        return render(request, 'dashboard.html', {'error': str(e)})
+
+def export_trainings(request):
+    wb = Workbook()
+    
+    # Sheet 1: Training Details
+    ws1 = wb.active
+    ws1.title = "Training Details"
+    
+    headers = ['Type', 'ID', 'User', 'Training Programme', 'Status', 'Request/Assignment Date', 'Current Approver', 'Approval Stage']
+    ws1.append(headers)
+    
+    # Request Trainings
+    request_trainings = RequestTraining.objects.select_related('custom_user', 'training_programme', 'status', 'current_approver').prefetch_related('approvals')
+    for rt in request_trainings:
+        approvals = rt.approvals.order_by('-approval_timestamp')
+        approval_stage = f"{approvals.count()}/{CustomUser.objects.filter(can_assign_trainings=True).count()}"
+        
+        ws1.append([
+            'Request Training',
+            rt.id,
+            rt.custom_user.username if rt.custom_user else 'N/A',
+            rt.training_programme.title if rt.training_programme else rt.other_training,
+            rt.status.name if rt.status else 'N/A',
+            rt.request_date.strftime('%Y-%m-%d') if rt.request_date else 'N/A',
+            rt.current_approver.username if rt.current_approver else 'N/A',
+            approval_stage
+        ])
+
+    # Superior Assigned Trainings
+    superior_trainings = SuperiorAssignedTraining.objects.select_related('assigned_by', 'department', 'training_programme', 'status', 'current_approver').prefetch_related('approvals')
+    for st in superior_trainings:
+        approvals = st.approvals.order_by('-approval_timestamp')
+        approval_stage = f"{approvals.count()}/{CustomUser.objects.filter(can_assign_trainings=True).count()}"
+        
+        ws1.append([
+            'Superior Assigned Training',
+            st.id,
+            st.assigned_by.username if st.assigned_by else 'N/A',
+            st.training_programme.title if st.training_programme else st.other_training,
+            st.status.name if st.status else 'N/A',
+            st.created_at.strftime('%Y-%m-%d') if st.created_at else 'N/A',
+            st.current_approver.username if st.current_approver else 'N/A',
+            approval_stage
+        ])
+
+    # Sheet 2: Training Matrix
+    ws2 = wb.create_sheet(title="Training Matrix")
+
+    # Get all training programmes
+    all_trainings = TrainingProgramme.objects.all()
+
+    # Prepare the headers
+    matrix_headers = ['EMPL NO', 'EMPL NAME', 'DEPARTMENT', 'DIVISION'] + [training.title for training in all_trainings]
+    ws2.append(matrix_headers)
+
+    # Style the header row
+    for cell in ws2[1]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+
+    # Get all users and their attended trainings
+    users = CustomUser.objects.prefetch_related(
+        Prefetch('selected_trainings', queryset=TrainingSession.objects.select_related('training_programme')),
+        Prefetch('requesttraining_set', queryset=RequestTraining.objects.select_related('training_programme'))
+    )
+
+    # Prepare the matrix data
+    for user in users:
+        user_row = [
+            user.employee_id,
+            user.employee_name,
+            user.department,
+            user.department.split(' - ')[0] if ' - ' in user.department else ''  # Assuming division is the first part of department
+        ]
+
+        attended_trainings = set(ts.training_programme.id for ts in user.selected_trainings.all() if ts.training_programme)
+        requested_trainings = set(rt.training_programme.id for rt in user.requesttraining_set.all() if rt.training_programme)
+
+        for training in all_trainings:
+            if training.id in attended_trainings:
+                user_row.append('Yes')
+            elif training.id in requested_trainings:
+                user_row.append('Requested')
+            else:
+                user_row.append('')
+
+        ws2.append(user_row)
+
+    # Adjust column widths for Training Matrix sheet
+    for column in ws2.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        ws2.column_dimensions[column_letter].width = adjusted_width
+
+    # Sheet 3: Master Data
+    ws3 = wb.create_sheet(title="Master Data")
+
+    # Headers for the master data sheet
+    master_headers = [
+        "SR. NO.", "EMPL NO", "EMPL NAME", "DIVISION", "PROGRAMME TITLE", "Category", "RELATED TO",
+        "VENUE", "ORGANISED BY", "FACULTY", "FROM", "TO", "DATE", "MONTH", "Year",
+        "Hrs", "Hrs In Numbers", "DESIGNATION", "GRADE", "DEPARTMENT", "RO EMPL NO", "RO NAME", "GENDER"
+    ]
+    ws3.append(master_headers)
+
+    # Style the header row
+    for cell in ws3[1]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+
+    # Fetch attendance data
+    attendances = AttendanceMaster.objects.select_related(
+        'custom_user', 'training_session', 'training_session__training_programme', 'training_session__venue'
+    ).order_by('attendance_date')
+
+    # Populate the master data sheet
+    for index, attendance in enumerate(attendances, start=1):
+        user = attendance.custom_user
+        training_session = attendance.training_session
+        training_programme = training_session.training_programme
+
+        # Get reporting officer details
+        ro_empl_no = ''
+        ro_name = ''
+        if hasattr(user, 'reporting_officer'):
+            ro = user.reporting_officer
+            ro_empl_no = ro.employee_id
+            ro_name = ro.employee_name
+
+        # Calculate duration
+        if training_session.from_time and training_session.to_time:
+            # Convert time to datetime for calculation
+            date = datetime.now().date()
+            datetime1 = datetime.combine(date, training_session.from_time)
+            datetime2 = datetime.combine(date, training_session.to_time)
+            
+            # Handle case where to_time is on the next day
+            if datetime2 < datetime1:
+                datetime2 += timedelta(days=1)
+            
+            duration = datetime2 - datetime1
+            hours = duration.total_seconds() / 3600
+        else:
+            hours = 0
+
+        row = [
+            index,  # SR. NO.
+            user.employee_id,  # EMPL NO
+            user.employee_name,  # EMPL NAME
+            user.department.split(' - ')[0] if ' - ' in user.department else user.department,  # DIVISION
+            training_programme.title if training_programme else '',  # PROGRAMME TITLE
+            training_programme.category if training_programme and hasattr(training_programme, 'category') else '',  # Category
+            training_programme.related_to if training_programme and hasattr(training_programme, 'related_to') else '',  # RELATED TO
+            training_session.venue.name if training_session.venue else '',  # VENUE
+            'JSW DPPL',  # ORGANISED BY (assuming it's always JSW DPPL)
+            training_session.trainer.name if training_session.trainer else '',  # FACULTY
+            training_session.from_time.strftime('%I:%M %p') if training_session.from_time else '',  # FROM
+            training_session.to_time.strftime('%I:%M %p') if training_session.to_time else '',  # TO
+            attendance.attendance_date.strftime('%d/%m/%Y'),  # DATE
+            attendance.attendance_date.strftime('%B'),  # MONTH
+            attendance.attendance_date.year,  # Year
+            f"{hours:.2f}",  # Hrs
+            hours,  # Hrs In Numbers
+            user.designation,  # DESIGNATION
+            user.grade,  # GRADE
+            user.department,  # DEPARTMENT
+            ro_empl_no,  # RO EMPL NO
+            ro_name,  # RO NAME
+            user.gender  # GENDER
+        ]
+        ws3.append(row)
+
+    # Adjust column widths for the master data sheet
+    for column in ws3.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        ws3.column_dimensions[column_letter].width = adjusted_width
+
+    # Prepare the response
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=trainings_export.xlsx'
+
+    # Save the workbook to the response
+    wb.save(response)
+
+    return response
+
 
 def easter_egg_page(request):
     context = {
@@ -31,24 +317,46 @@ def easter_egg_page(request):
     return render(request, 'easter_egg.html', context)
 logger = logging.getLogger(__name__)
 
+@csrf_exempt
 def attendance_view(request):
     if request.method == 'POST':
         username = request.POST.get('username')
-        try:
-            user = CustomUser.objects.get(username=username)
-            attendance_records = AttendanceMaster.objects.filter(custom_user=user).select_related('training_session')
-            training_sessions = [
-                {
-                    'title': record.training_session.training_programme.title if record.training_session.training_programme else record.training_session.custom_training_programme,
-                    'date': record.attendance_date,
-                }
-                for record in attendance_records
-            ]
-            return JsonResponse({'status': 'success', 'training_sessions': training_sessions})
-        except CustomUser.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'User not found.'})
+        user = CustomUser.objects.filter(username=username).first()
+        if user:
+            if not user.work_order_no:
+                # This is an employee, require login
+                return JsonResponse({'status': 'employee_login_required'})
+            else:
+                # This is an associate, return data directly
+                return get_training_sessions(user)
+        return JsonResponse({'status': 'error', 'message': 'User not found.'})
     return render(request, 'attendance_form.html')
 
+@csrf_exempt
+def employee_login(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        requested_username = request.POST.get('requested_username')
+        
+        user = authenticate(request, username=username, password=password)
+        if user is not None and (user.is_checker or user.is_maker):
+            login(request, user)
+            requested_user = CustomUser.objects.filter(username=requested_username).first()
+            if requested_user and not requested_user.work_order_no:
+                return get_training_sessions(requested_user)
+        return JsonResponse({'status': 'error', 'message': 'Invalid credentials or unauthorized access'})
+
+def get_training_sessions(user):
+    attendance_records = AttendanceMaster.objects.filter(custom_user=user).select_related('training_session')
+    training_sessions = [
+        {
+            'title': record.training_session.training_programme.title if record.training_session.training_programme else record.training_session.custom_training_programme,
+            'date': record.attendance_date.strftime('%Y-%m-%d'),
+        }
+        for record in attendance_records
+    ]
+    return JsonResponse({'status': 'success', 'training_sessions': training_sessions})
 @csrf_protect
 @login_required
 def home(request):
@@ -76,49 +384,7 @@ def home(request):
     response['Expires'] = '0'
     return response
 
-@login_required
-def top_authority_requests(request):
-    if not request.user.is_top_authority:
-        messages.error(request, "You are not authorized to access this page.")
-        return redirect('home')
 
-    user_requests = RequestTraining.objects.filter(current_approver=request.user).order_by('-request_date')
-
-    if request.method == 'POST':
-        form = TrainingRequestApprovalForm(request.POST)
-        if form.is_valid():
-            request_id = form.cleaned_data.get('request_id')
-            hod_comment = form.cleaned_data.get('hod_comment')
-            action = form.cleaned_data.get('action')
-
-            training_request = get_object_or_404(RequestTraining, id=request_id)
-            training_request.hod_comment = hod_comment
-            approval_timestamp = timezone.now()
-
-            if action == 'approve':
-                training_request.is_approved = True
-                training_request.final_approval_timestamp = approval_timestamp
-                training_request.current_approver = None
-                training_request.save()
-                messages.success(request, f"Request {training_request.id} approved successfully.")
-            elif action == 'reject':
-                training_request.is_rejected = True
-                training_request.is_approved = False
-                training_request.current_approver = None
-                training_request.final_approval_timestamp = approval_timestamp
-                training_request.save()
-                messages.success(request, f"Request {training_request.id} rejected successfully.")
-            return redirect('top_authority_requests')
-        else:
-            messages.error(request, "Invalid form submission. Please try again.")
-    else:
-        form = TrainingRequestApprovalForm()
-
-    context = {
-        'user_requests': user_requests,
-        'form': form,
-    }
-    return render(request, 'top_authority_requests.html', context)
 
 
 
@@ -130,6 +396,7 @@ def user_trainings(request):
     # Fetch training sessions where checker_finalized is True and needs_hod_nomination is False
     sessions_direct = TrainingSession.objects.filter(
         selected_participants=user,
+        finalized = True,
         checker_finalized=True,
         needs_hod_nomination=False
     )
@@ -137,6 +404,7 @@ def user_trainings(request):
     # Fetch training sessions where checker_finalized is True and needs_hod_nomination is True
     approvals = TrainingApproval.objects.filter(
         selected_participants=user,
+        training_session__finalized=True,
         training_session__checker_finalized=True,
         training_session__needs_hod_nomination=True
     ).select_related('training_session')
@@ -330,6 +598,50 @@ def assign_superior(request):
         return redirect('request_training')
 #------------------------------------------------------------------------------------------------------------------------------------@login_required@login_required
 @login_required
+def top_authority_requests(request):
+    if not request.user.is_top_authority:
+        messages.error(request, "You are not authorized to access this page.")
+        return redirect('home')
+
+    user_requests = RequestTraining.objects.filter(current_approver=request.user).order_by('-request_date')
+
+    if request.method == 'POST':
+        form = TrainingRequestApprovalForm(request.POST)
+        if form.is_valid():
+            request_id = form.cleaned_data.get('request_id')
+            hod_comment = form.cleaned_data.get('hod_comment')
+            action = form.cleaned_data.get('action')
+
+            training_request = get_object_or_404(RequestTraining, id=request_id)
+            training_request.hod_comment = hod_comment
+            approval_timestamp = timezone.now()
+
+            if action == 'approve':
+                training_request.is_approved = True
+                training_request.final_approval_timestamp = approval_timestamp
+                training_request.current_approver = None
+                training_request.save()
+                messages.success(request, f"Request {training_request.id} approved successfully.")
+            elif action == 'reject':
+                training_request.is_rejected = True
+                training_request.is_approved = False
+                training_request.current_approver = None
+                training_request.final_approval_timestamp = approval_timestamp
+                training_request.save()
+                messages.success(request, f"Request {training_request.id} rejected successfully.")
+            return redirect('top_authority_requests')
+        else:
+            messages.error(request, "Invalid form submission. Please try again.")
+    else:
+        form = TrainingRequestApprovalForm()
+
+    context = {
+        'user_requests': user_requests,
+        'form': form,
+    }
+    return render(request, 'top_authority_requests.html', context)
+
+@login_required
 def superior_check_requests(request):
     user = request.user
 
@@ -446,6 +758,8 @@ def superior_check_requests(request):
             else:
                 messages.error(request, "Invalid form submission. Please check the form and try again.")
                 logger.error(f"Invalid assignment form submission by {user.username}. Errors: {assignment_form.errors}")
+                logger.error(f"POST data: {request.POST}")
+                logger.error(f"Assigned users queryset: {assignment_form.fields['assigned_users'].queryset}")
 
         elif form.is_valid():
             request_id = form.cleaned_data.get('request_id')
@@ -809,24 +1123,42 @@ def checker_check_requests(request):
     user_requests = RequestTraining.objects.filter(final_approval_timestamp__isnull=False)
     superior_assignments = SuperiorAssignedTraining.objects.filter(final_approval_timestamp__isnull=False)
 
-    # Group by training programme and status
-    user_requests_agg = user_requests.values('training_programme__title', 'status__name').annotate(count=Count('id'))
-    superior_assignments_agg = superior_assignments.values('training_programme__title', 'status__name').annotate(count=Count('id'))
+    # Combine and deduplicate requests
+    combined_requests = {}
+    for req in list(user_requests) + list(superior_assignments):
+        key = (req.training_programme.id, req.custom_user.id if hasattr(req, 'custom_user') else req.assigned_users.first().id)
+        if key not in combined_requests:
+            combined_requests[key] = {
+                'training_programme': req.training_programme,
+                'user': req.custom_user if hasattr(req, 'custom_user') else req.assigned_users.first(),
+                'status': req.status,
+                'user_requested': isinstance(req, RequestTraining),
+                'hod_assigned': isinstance(req, SuperiorAssignedTraining),
+            }
+        else:
+            combined_requests[key]['user_requested'] |= isinstance(req, RequestTraining)
+            combined_requests[key]['hod_assigned'] |= isinstance(req, SuperiorAssignedTraining)
+            if req.status:
+                combined_requests[key]['status'] = req.status
 
-    # Combine the counts and initialize counts for pending, approved, and rejected
+    # Aggregate counts
     combined_counts = {}
-    for req in list(user_requests_agg) + list(superior_assignments_agg):
-        title = req['training_programme__title']
-        status = req['status__name']
+    for req in combined_requests.values():
+        title = req['training_programme'].title
         if title not in combined_counts:
-            combined_counts[title] = {'pending': 0, 'approved': 0, 'rejected': 0}
+            combined_counts[title] = {'pending': 0, 'approved': 0, 'rejected': 0, 'user_requested': 0, 'hod_assigned': 0}
 
-        if status is None:
-            combined_counts[title]['pending'] += req['count']
-        elif status == 'CKRapproved':
-            combined_counts[title]['approved'] += req['count']
-        elif status == 'CKRrejected':
-            combined_counts[title]['rejected'] += req['count']
+        if req['status'] is None:
+            combined_counts[title]['pending'] += 1
+        elif req['status'].name == 'CKRapproved':
+            combined_counts[title]['approved'] += 1
+        elif req['status'].name == 'CKRrejected':
+            combined_counts[title]['rejected'] += 1
+
+        if req['user_requested']:
+            combined_counts[title]['user_requested'] += 1
+        if req['hod_assigned']:
+            combined_counts[title]['hod_assigned'] += 1
 
     return render(request, 'checkercheck.html', {
         'combined_requests': combined_counts,
@@ -917,11 +1249,27 @@ def checker_training_detail(request, training_programme_title):
     user_requests = RequestTraining.objects.filter(training_programme__title=training_programme_title, final_approval_timestamp__isnull=False)
     superior_assignments = SuperiorAssignedTraining.objects.filter(training_programme__title=training_programme_title, final_approval_timestamp__isnull=False)
 
-    combined_requests = sorted(
-        list(user_requests) + list(superior_assignments),
-        key=lambda x: x.final_approval_timestamp,
-        reverse=True
-    )
+    # Combine and deduplicate requests
+    combined_requests = {}
+    for req in list(user_requests) + list(superior_assignments):
+        user_id = req.custom_user.id if isinstance(req, RequestTraining) else req.assigned_users.first().id
+        if user_id not in combined_requests:
+            combined_requests[user_id] = {
+                'user': req.custom_user if isinstance(req, RequestTraining) else req.assigned_users.first(),
+                'user_requested': isinstance(req, RequestTraining),
+                'hod_assigned': isinstance(req, SuperiorAssignedTraining),
+                'request': req,
+                'assigned_by': req.assigned_by if isinstance(req, SuperiorAssignedTraining) else None,
+                'date': req.request_date if isinstance(req, RequestTraining) else req.created_at,
+            }
+        else:
+            combined_requests[user_id]['user_requested'] |= isinstance(req, RequestTraining)
+            combined_requests[user_id]['hod_assigned'] |= isinstance(req, SuperiorAssignedTraining)
+            if isinstance(req, SuperiorAssignedTraining):
+                combined_requests[user_id]['assigned_by'] = req.assigned_by
+
+    # Sort the combined requests
+    sorted_requests = sorted(combined_requests.values(), key=lambda x: x['date'], reverse=True)
 
     if request.method == 'POST':
         request_ids = request.POST.getlist('selected_requests')
@@ -940,11 +1288,11 @@ def checker_training_detail(request, training_programme_title):
         messages.success(request, "Selected training requests have been updated successfully.")
         return redirect('checker_check_requests')
 
-    pending_approval = any(req.status is None or req.status.name not in ['CKRapproved', 'CKRrejected'] for req in combined_requests)
+    pending_approval = any(req['request'].status is None or req['request'].status.name not in ['CKRapproved', 'CKRrejected'] for req in sorted_requests)
 
     return render(request, 'checker_training_detail.html', {
         'training_programme_title': training_programme_title,
-        'combined_requests': combined_requests,
+        'combined_requests': sorted_requests,
         'pending_approval': pending_approval
     })
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------

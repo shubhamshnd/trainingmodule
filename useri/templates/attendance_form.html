@@ -3,275 +3,246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance and Training Sessions</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.3.1/dist/jsQR.min.js"></script>
+    <title>Attendance Lookup</title>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body, html {
-            height: 100%;
+        body {
+            background-color: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
         }
-        .container {
-            min-height: 100%;
-            display: flex;
-            flex-direction: column;
+        .app-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
         }
-        .card {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
+        .app-header {
+            background-color: #007bff;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            border-radius: 10px 10px 0 0;
             margin-bottom: 0;
         }
-        .card-body {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
+        .app-content {
+            background-color: white;
+            border-radius: 0 0 10px 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        .table-responsive {
-            flex-grow: 1;
-            overflow-y: auto;
+        .form-control, .btn {
+            border-radius: 20px;
         }
-        #cameraContainer {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 20px;
-            position: relative;
-            width: 300px;
-            height: 300px;
-            overflow: hidden;
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
         }
-        #cameraBox {
+        .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        #qr-reader {
             width: 100%;
-            height: 100%;
-            border: 2px solid #007bff;
+            margin-top: 20px;
+        }
+        #sessionsTable {
+            border-radius: 10px;
             overflow: hidden;
-            position: relative;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        #qrVideo {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            min-width: 100%;
-            min-height: 100%;
-            width: auto;
-            height: auto;
-        }
-        #qrCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+        #sessionsTable th {
+            background-color: #007bff;
+            color: white;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="row h-100">
-            <div class="col-md-8 mx-auto">
-                <div class="card">
-                    <div class="card-body">
-                        <h1 class="card-title text-center mb-3">Attendance Lookup</h1>
-                        
-                        <form id="attendanceForm" method="POST" action="{% url 'attendance_view' %}" class="mb-3">
-                            {% csrf_token %}
-                            <div class="mb-2">
-                                <label for="username" class="form-label">Enter Username:</label>
-                                <input type="text" class="form-control" id="username" name="username" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary w-100">Submit</button>
-                        </form>
+    <div class="app-container">
+        <h1 class="app-header">Attendance Lookup</h1>
+        <div class="app-content">
+            <form id="attendanceForm">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="username" class="form-label">Enter Username or Scan QR Code:</label>
+                    <input type="text" id="username" name="username" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mb-2">Submit</button>
+            </form>
 
-                        <div class="mb-3">
-                            <button id="startCamera" class="btn btn-secondary w-100 mb-2">Start QR Scanner</button>
-                            <select id="cameraSelect" class="form-select mb-2" style="display: none;">
-                                <!-- Camera options will be added here -->
-                            </select>
-                            <div id="cameraContainer" style="display: none;">
-                                <div id="cameraBox">
-                                    <video id="qrVideo" playsinline></video>
-                                </div>
-                                <canvas id="qrCanvas" style="display: none;"></canvas>
-                            </div>
-                        </div>
+            <button id="startScanner" class="btn btn-secondary w-100 mb-3">Start QR Scanner</button>
 
-                        <div id="resultSection" class="flex-grow-1 d-flex flex-column" style="display: none;">
-                            <h2 class="text-center mb-2">Training Sessions Attended</h2>
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Title</th>
-                                            <th>Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="trainingList">
-                                        <!-- Training sessions will be dynamically added here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
+            <div id="qr-reader" style="display: none;"></div>
+
+            <div id="resultSection" style="display: none;">
+                <h2 class="text-center mb-3">Training Sessions Attended</h2>
+                <div class="table-responsive">
+                    <table id="sessionsTable" class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Employee Login Modal -->
+    <div class="modal fade" id="employeeLoginModal" tabindex="-1" aria-labelledby="employeeLoginModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="employeeLoginModalLabel">Employee Login Required</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="employeeLoginForm">
+                        <div class="mb-3">
+                            <label for="employeeUsername" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="employeeUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="employeePassword" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="employeePassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Login</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        document.getElementById('attendanceForm').addEventListener('submit', fetchAttendance);
-        document.getElementById('startCamera').addEventListener('click', startQRScanner);
+        $(document).ready(function() {
+            let html5QrCode;
 
-        let videoElem = document.getElementById('qrVideo');
-        let cameraSelect = document.getElementById('cameraSelect');
-        let cameraContainer = document.getElementById('cameraContainer');
-        let qrCanvas = document.getElementById('qrCanvas');
-        let scanning = false;
-
-        function fetchAttendance(event) {
-            event.preventDefault();
-            const form = document.getElementById('attendanceForm');
-            const formData = new FormData(form);
-            axios.post(form.action, formData, {
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                }
-            })
-            .then(response => {
-                const data = response.data;
-                if (data.status === 'success') {
-                    displayTrainings(data.training_sessions);
-                } else {
-                    alert(data.message);
-                }
-            })
-            .catch(error => {
-                console.error('There was an error!', error);
+            $('#attendanceForm').on('submit', function(e) {
+                e.preventDefault();
+                var username = $('#username').val();
+                fetchAttendance(username);
             });
-        }
 
-        function getBackCamera(devices) {
-            const backCameraKeywords = ['back', 'rear', 'environment'];
-            return devices.find(device => 
-                backCameraKeywords.some(keyword => 
-                    device.label.toLowerCase().includes(keyword)
-                )
-            ) || devices[devices.length - 1]; // Default to last camera if no match
-        }
-
-        async function startQRScanner() {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-                cameraSelect.innerHTML = '';
-                videoDevices.forEach((device, index) => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.text = device.label || `Camera ${index + 1}`;
-                    cameraSelect.appendChild(option);
-                });
-
-                cameraSelect.style.display = 'block';
-                cameraContainer.style.display = 'flex';
-
-                cameraSelect.addEventListener('change', startScanning);
-
-                const backCamera = getBackCamera(videoDevices);
-                if (backCamera) {
-                    cameraSelect.value = backCamera.deviceId;
-                }
-
-                await startScanning();
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-                alert('Unable to access the camera. Please make sure you have granted the necessary permissions.');
-            }
-        }
-
-        async function startScanning() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        deviceId: cameraSelect.value ? { exact: cameraSelect.value } : undefined,
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+            function fetchAttendance(username) {
+                $.ajax({
+                    url: '/attendance_view/',
+                    method: 'POST',
+                    data: {
+                        username: username,
+                        csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+                    },
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            displayTrainingSessions(response.training_sessions);
+                        } else if (response.status === 'employee_login_required') {
+                            $('#employeeLoginModal').modal('show');
+                        } else {
+                            alert('User not found or unauthorized access.');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Error: ' + error);
                     }
                 });
-                videoElem.srcObject = stream;
-                await videoElem.play();
-                scanning = true;
-                scanQRCode();
-            } catch (error) {
-                console.error('Error starting video stream:', error);
-                alert('Failed to start the camera. Please try again or use a different camera.');
-            }
-        }
-
-        function scanQRCode() {
-            if (videoElem.readyState === videoElem.HAVE_ENOUGH_DATA) {
-                qrCanvas.width = cameraContainer.offsetWidth;
-                qrCanvas.height = cameraContainer.offsetHeight;
-                const ctx = qrCanvas.getContext('2d');
-
-                // Calculate the scaling factor
-                const scale = Math.min(qrCanvas.width / videoElem.videoWidth, qrCanvas.height / videoElem.videoHeight);
-                const videoWidth = videoElem.videoWidth * scale;
-                const videoHeight = videoElem.videoHeight * scale;
-                const xOffset = (qrCanvas.width - videoWidth) / 2;
-                const yOffset = (qrCanvas.height - videoHeight) / 2;
-
-                // Draw the video frame onto the canvas
-                ctx.drawImage(videoElem, xOffset, yOffset, videoWidth, videoHeight);
-
-                const imageData = ctx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-                if (code) {
-                    console.log("Found QR code", code.data);
-                    document.getElementById('username').value = code.data;
-                    fetchAttendance(new Event('submit'));
-                    stopScanning();
-                }
             }
 
-            if (scanning) {
-                requestAnimationFrame(scanQRCode);
-            }
-        }
+            $('#employeeLoginForm').on('submit', function(e) {
+                e.preventDefault();
+                var username = $('#employeeUsername').val();
+                var password = $('#employeePassword').val();
 
-        function stopScanning() {
-            scanning = false;
-            if (videoElem.srcObject) {
-                videoElem.srcObject.getTracks().forEach(track => track.stop());
-            }
-            cameraContainer.style.display = 'none';
-            cameraSelect.style.display = 'none';
-        }
-
-        function displayTrainings(trainings) {
-            const tableBody = document.getElementById('trainingList');
-            tableBody.innerHTML = ''; // Clear previous entries
-        
-            trainings.forEach(training => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${training.title}</td>
-                    <td>${formatDate(training.date)}</td>
-                `;
-                tableBody.appendChild(row);
+                $.ajax({
+                    url: '/employee_login/',
+                    method: 'POST',
+                    data: {
+                        username: username,
+                        password: password,
+                        requested_username: $('#username').val(),
+                        csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+                    },
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            $('#employeeLoginModal').modal('hide');
+                            displayTrainingSessions(response.training_sessions);
+                        } else {
+                            alert('Invalid credentials or unauthorized access');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Error: ' + error);
+                    }
+                });
             });
 
-            document.getElementById('resultSection').style.display = 'block';
-        }
+            function displayTrainingSessions(sessions) {
+                // Sort sessions by date, latest first
+                sessions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        function formatDate(dateString) {
-            const options = { year: 'numeric', month: 'long', day: 'numeric' };
-            return new Date(dateString).toLocaleDateString(undefined, options);
-        }
+                var tbody = $('#sessionsTable tbody');
+                tbody.empty();
+                sessions.forEach(function(session) {
+                    // Format the date
+                    let formattedDate = new Date(session.date).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    tbody.append('<tr><td>' + session.title + '</td><td>' + formattedDate + '</td></tr>');
+                });
+                $('#resultSection').show();
+            }
+
+            // QR code scanning functionality
+            $('#startScanner').on('click', function() {
+                if (html5QrCode && html5QrCode.isScanning) {
+                    html5QrCode.stop().then(() => {
+                        $('#qr-reader').hide();
+                        $('#startScanner').text('Start QR Scanner');
+                    });
+                } else {
+                    $('#qr-reader').show();
+                    $('#startScanner').text('Stop QR Scanner');
+                    
+                    html5QrCode = new Html5Qrcode("qr-reader");
+                    const qrBoxFunction = function(viewfinderWidth, viewfinderHeight) {
+                        let minEdgePercentage = 0.7; // 70%
+                        let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                        let qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+                        return {
+                            width: qrboxSize,
+                            height: qrboxSize
+                        };
+                    }
+
+                    html5QrCode.start(
+                        { facingMode: "environment" },
+                        {
+                            qrbox: qrBoxFunction,
+                        },
+                        (decodedText, decodedResult) => {
+                            // Handle the scanned code
+                            html5QrCode.stop();
+                            $('#qr-reader').hide();
+                            $('#startScanner').text('Start QR Scanner');
+                            $('#username').val(decodedText);
+                            fetchAttendance(decodedText);
+                        },
+                        (errorMessage) => {
+                            // Handle scan error
+                            console.log(errorMessage);
+                        }
+                    ).catch((err) => {
+                        // Handle start failure
+                        console.log(err);
+                        alert('Failed to start QR scanner: ' + err);
+                    });
+                }
+            });
+        });
     </script>
 </body>
 </html>

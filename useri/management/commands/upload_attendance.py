@@ -109,17 +109,32 @@ class Command(BaseCommand):
             if created:
                 logging.info(f"Created new TrainingSession on {session_date} from {from_time} to {to_time}")
             
-            # Create the AttendanceMaster entry
-            try:
-                AttendanceMaster.objects.create(
-                    custom_user=CustomUser.objects.get(username=empl_no),
-                    training_session=training_session,
-                    attendance_date=session_date
-                )
-                logging.info(f"Created attendance record for user {empl_no} in session on {session_date}")
-            except IntegrityError:
-                logging.warning(f"Duplicate attendance record for user {empl_no} in session on {session_date}. Skipping entry.")
-                continue
+            # Check for existing attendance record
+            attendance_exists = AttendanceMaster.objects.filter(
+                custom_user=CustomUser.objects.get(username=empl_no),
+                training_session=training_session,
+                attendance_date=session_date
+            ).exists()
+
+            if not attendance_exists:
+                # Create the AttendanceMaster entry
+                try:
+                    AttendanceMaster.objects.create(
+                        custom_user=CustomUser.objects.get(username=empl_no),
+                        training_session=training_session,
+                        attendance_date=session_date
+                    )
+                    logging.info(f"Created attendance record for user {empl_no} in session on {session_date}")
+                except IntegrityError:
+                    logging.warning(f"Duplicate attendance record for user {empl_no} in session on {session_date}. Skipping entry.")
+                    continue
+
+            # Add the user to selected participants if not already added
+            training_session.selected_participants.add(CustomUser.objects.get(username=empl_no))
+
+            # Set the attendance_frozen field to True
+            training_session.attendance_frozen = True
+            training_session.save()
 
         # Log the end of the process
         logging.info("Attendance data upload process completed successfully.")

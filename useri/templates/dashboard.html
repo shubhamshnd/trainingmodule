@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Training Management Dashboard{% endblock %}
+
+{% block extrastyles %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+    body {
+        overflow-y: auto !important;
+    }
+    .dashboard-container {
+        min-height: calc(100vh - 60px);
+        overflow-y: auto;
+    }
+    .change-up { color: #10B981; }
+    .change-down { color: #EF4444; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <label for="time-range" class="block text-sm font-medium text-gray-700">Select Time Range:</label>
+        <select id="time-range" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="all-time">All Time</option>
+            <option value="current-month">Current Month</option>
+            <option value="financial-year">Current Financial Year</option>
+        </select>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <i class="fas fa-chalkboard-teacher text-4xl text-blue-500 mb-4"></i>
+            <h3 class="text-xl font-semibold mb-2">Total Training Sessions</h3>
+            <p class="text-3xl font-bold text-blue-600">
+                <span id="total-training-sessions"></span>
+                <span id="training-sessions-change" class="text-lg ml-2"></span>
+            </p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <i class="fas fa-user-graduate text-4xl text-green-500 mb-4"></i>
+            <h3 class="text-xl font-semibold mb-2">Total Request Trainings</h3>
+            <p class="text-3xl font-bold text-green-600">
+                <span id="total-request-trainings"></span>
+                <span id="request-trainings-change" class="text-lg ml-2"></span>
+            </p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <i class="fas fa-user-tie text-4xl text-purple-500 mb-4"></i>
+            <h3 class="text-xl font-semibold mb-2">Superior Assigned Trainings</h3>
+            <p class="text-3xl font-bold text-purple-600">
+                <span id="total-superior-assigned-trainings"></span>
+                <span id="superior-assigned-trainings-change" class="text-lg ml-2"></span>
+            </p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-semibold mb-4">Training Sessions per Month</h3>
+            <canvas id="sessionsPerMonthChart"></canvas>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-semibold mb-4">Top Requested Trainings</h3>
+            <canvas id="topRequestedTrainingsChart"></canvas>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-semibold mb-4">Department Participation</h3>
+            <canvas id="departmentParticipationChart"></canvas>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-semibold mb-4">Request Trainings Trend</h3>
+            <canvas id="requestTrainingsTrendChart"></canvas>
+        </div>
+    </div>
+
+    <div class="mt-8 flex justify-center">
+        <a href="{% url 'export_trainings' %}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Export Trainings Data
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrascripts %}
+<script>
+    // Parse the dashboard data
+    let dashboardData;
+    try {
+        dashboardData = JSON.parse('{{ dashboard_data|escapejs }}');
+        console.log('Parsed dashboard data:', dashboardData);
+    } catch (error) {
+        console.error('Error parsing dashboard data:', error);
+        dashboardData = {};
+    }
+    
+    function displayTotal(elementId, total, change) {
+        const totalElement = document.getElementById(elementId);
+        const changeElement = document.getElementById(elementId + '-change');
+        
+        if (totalElement && total !== undefined) {
+            totalElement.textContent = total;
+        } else {
+            console.warn(`Element ${elementId} not found or total is undefined`);
+        }
+        
+        if (changeElement && change !== undefined) {
+            if (change > 0) {
+                changeElement.innerHTML = `<i class="fas fa-arrow-up change-up"></i> ${change}`;
+            } else if (change < 0) {
+                changeElement.innerHTML = `<i class="fas fa-arrow-down change-down"></i> ${Math.abs(change)}`;
+            } else {
+                changeElement.innerHTML = `<i class="fas fa-equals"></i> ${change}`;
+            }
+        } else {
+            console.warn(`Change element for ${elementId} not found or change is undefined`);
+        }
+    }
+    
+    function createChart(elementId, type, labels, data, label, color) {
+        const chartElement = document.getElementById(elementId);
+        if (!chartElement) {
+            console.warn(`Chart element ${elementId} not found`);
+            return;
+        }
+        if (!labels || !data || labels.length === 0 || data.length === 0) {
+            console.warn(`No data available for chart ${elementId}`);
+            chartElement.innerHTML = 'No data available';
+            return;
+        }
+        new Chart(chartElement, {
+            type: type,
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: label,
+                    data: data,
+                    backgroundColor: color,
+                    borderColor: color,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+    
+    function filterDataByTimeRange(data, timeRange) {
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        
+        switch (timeRange) {
+            case 'current-month':
+                return data.filter(item => {
+                    const itemDate = new Date(item.month || item.date);
+                    return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
+                });
+            case 'financial-year':
+                const financialYearStart = new Date(currentMonth < 3 ? currentYear - 1 : currentYear, 3, 1);
+                const financialYearEnd = new Date(currentMonth < 3 ? currentYear : currentYear + 1, 2, 31);
+                return data.filter(item => {
+                    const itemDate = new Date(item.month || item.date);
+                    return itemDate >= financialYearStart && itemDate <= financialYearEnd;
+                });
+            default:
+                return data;
+        }
+    }
+    
+    function updateDashboard(timeRange) {
+        // Filter data based on time range
+        const filteredSessionsPerMonth = filterDataByTimeRange(dashboardData.sessions_per_month, timeRange);
+        const filteredRequestsPerMonth = filterDataByTimeRange(dashboardData.requests_per_month, timeRange);
+        
+        // Update totals
+        const totalSessions = filteredSessionsPerMonth.reduce((sum, item) => sum + item.count, 0);
+        const totalRequests = filteredRequestsPerMonth.reduce((sum, item) => sum + item.count, 0);
+        
+        displayTotal('total-training-sessions', totalSessions, totalSessions - dashboardData.total_training_sessions);
+        displayTotal('total-request-trainings', totalRequests, totalRequests - dashboardData.total_request_trainings);
+        displayTotal('total-superior-assigned-trainings', dashboardData.total_superior_assigned_trainings, 0); // Assuming this doesn't change
+        
+        // Update charts
+        createChart('sessionsPerMonthChart', 'line', 
+            filteredSessionsPerMonth.map(item => new Date(item.month).toLocaleDateString('default', { month: 'short', year: 'numeric' })),
+            filteredSessionsPerMonth.map(item => item.count),
+            'Training Sessions',
+            'rgb(59, 130, 246)'
+        );
+        
+        createChart('topRequestedTrainingsChart', 'bar',
+            dashboardData.top_requested_trainings.map(item => item.training_programme__title),
+            dashboardData.top_requested_trainings.map(item => item.count),
+            'Requests',
+            'rgb(16, 185, 129)'
+        );
+        
+        createChart('departmentParticipationChart', 'bar',
+            dashboardData.department_participation.map(item => item.name),
+            dashboardData.department_participation.map(item => item.participant_count),
+            'Participants',
+            'rgb(139, 92, 246)'
+        );
+        
+        createChart('requestTrainingsTrendChart', 'line',
+            filteredRequestsPerMonth.map(item => new Date(item.month).toLocaleDateString('default', { month: 'short', year: 'numeric' })),
+            filteredRequestsPerMonth.map(item => item.count),
+            'Request Trainings',
+            'rgb(245, 158, 11)'
+        );
+    }
+    
+    function initializeDashboard() {
+        const timeRangeSelect = document.getElementById('time-range');
+        timeRangeSelect.addEventListener('change', (event) => {
+            updateDashboard(event.target.value);
+        });
+        
+        // Initial dashboard update
+        updateDashboard('all-time');
+    }
+    
+    // Initialize the dashboard when the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', initializeDashboard);
+</script>
+{% endblock %}

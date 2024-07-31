@@ -18,37 +18,40 @@
                     <th scope="col" class="text-nowrap">User Department</th>
                     <th scope="col" class="text-nowrap">Source</th>
                     <th scope="col" class="text-nowrap">Assigned By</th>
-                    <th scope="col" class="text-nowrap">Date</th>
-             
+                    <th scope="col" class="text-nowrap">Date(s)</th>
                 </tr>
             </thead>
             <tbody>
-                {% for request in combined_requests %}
-                <tr>
-                    <td class="text-nowrap">
-                        <input type="checkbox" class="participant-checkbox" data-user-id="{{ request.custom_user.id }}" {% if request.custom_user in selected_participants %}checked{% endif %}>
-                    </td>
-                    <td class="text-nowrap">
-                        {{ request.custom_user.employee_name }}
-                    </td>
-                    <td class="text-nowrap">
-                        {% if request.custom_user.department %}
-                            {{ request.custom_user.department.name }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td class="text-nowrap">
-                        User Requested
-                    </td>
-                    <td class="text-nowrap">
-                        -
-                    </td>
-                    <td class="text-nowrap">
-                        {{ request.request_date }}
-                    </td>
-                
-                </tr>
+                {% regroup combined_requests by custom_user.id as user_requests %}
+                {% for user_group in user_requests %}
+                    {% with user=user_group.list.0.custom_user %}
+                    <tr>
+                        <td class="text-nowrap">
+                            <input type="checkbox" class="participant-checkbox" data-user-id="{{ user.id }}" {% if user in selected_participants %}checked{% endif %}>
+                        </td>
+                        <td class="text-nowrap">
+                            {{ user.employee_name }}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if user.department %}
+                                {{ user.department.name }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            User Requested
+                        </td>
+                        <td class="text-nowrap">
+                            -
+                        </td>
+                        <td class="text-nowrap">
+                            {% for request in user_group.list %}
+                                {{ request.request_date|date:"M d, Y" }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endwith %}
                 {% endfor %}
             </tbody>
         </table>
@@ -68,9 +71,11 @@
             <div class="modal-body">
                 <ul>
                     {% for training in trainings %}
-                        <li>
-                            <input type="radio" name="training-session" value="{{ training.id }}"> {{ training }}
-                        </li>
+                        {% if not training.finalized %}
+                            <li>
+                                <input type="radio" name="training-session" value="{{ training.id }}"> {{ training }}
+                            </li>
+                        {% endif %}
                     {% endfor %}
                 </ul>
             </div>

@@ -23,3 +23,8 @@ def is_approved_by(request, user):
 @register.filter
 def get_field(form, field_name):
     return form[field_name]
+
+
+@register.filter
+def get_class_name(value):
+    return value.__class__.__name__

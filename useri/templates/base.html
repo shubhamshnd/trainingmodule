@@ -14,22 +14,33 @@
     body {
       font-size: 14px;
       background-color: #EEF1FF;
-      zoom: 90%; /* Set the default zoom level */
-      overflow: hidden; /* Hide horizontal scrollbar */
-    }
-    .navbar {
-      background-color: #874CCC;  
-    }
-    .container {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+  }
+  .navbar {
+      background-color: #874CCC;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+  }
+  .content-wrapper {
+      flex: 1;
+      overflow-y: auto;
+      padding-top: 20px;
+  }
+  .container {
       margin-top: 5px;
-    }
-    .navbar-dark .navbar-nav .nav-link.active {
-      color: #ffffff; /* White color */
-    }
-    .nav-item .nav-link.btn-link img {
-      width: 40px; /* Adjust the size as needed */
+  }
+  .navbar-dark .navbar-nav .nav-link.active {
+      color: #ffffff;
+  }
+  .nav-item .nav-link.btn-link img {
+      width: 40px;
       height: 40px;
-    }
+  }
     /* HTML: <div class="loader"></div> */
     .loader-backdrop {
       position: fixed;
@@ -83,61 +94,66 @@
 <body>
   <nav class="navbar navbar-expand-sm navbar-dark">
     <div class="container">
-      <a class="navbar-brand" href="#">DPPL Training Management</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item {% if request.resolver_match.view_name == 'home' %}active{% endif %}">
-            <a class="nav-link" href="{% url 'home' %}">Calendar</a>
-          </li>
-          {% if user.is_checker and not user.is_top_authority %}
-            <li class="nav-item {% if request.resolver_match.view_name == 'checker_check_requests' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'checker_check_requests' %}">User Requests</a>
-            </li>
-            <li class="nav-item {% if request.resolver_match.view_name == 'checker_finalize_trainings' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'checker_finalize_trainings' %}">Finalize Trainings</a>
-            </li>
-          {% endif %}
-          {% if is_superior and not user.is_top_authority %}
-            <li class="nav-item {% if request.resolver_match.view_name == 'superior_check_requests' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'superior_check_requests' %}">Course Requests</a>
-            </li>
-            <li class="nav-item {% if request.resolver_match.view_name == 'list_and_finalize_trainings' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'list_and_finalize_trainings' %}">HR Requests</a>
-            </li>
-          {% endif %}
-          {% if user.is_maker %}
-            <li class="nav-item {% if request.resolver_match.view_name == 'create_training' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'create_training' %}">Create Trainings</a>
-            </li>
-            <li class="nav-item {% if request.resolver_match.view_name == 'maker_check_requests' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'maker_check_requests' %}">Approved Requests</a>
-            </li>
-          {% endif %}
-          {% if not user.is_checker and not is_superior and not user.is_top_authority or user.is_maker %}
-            <li class="nav-item {% if request.resolver_match.view_name == 'request_training' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'request_training' %}">Request Courses</a>
-            </li>
-          {% endif %}
-          {% if user.is_top_authority %}
-            <li class="nav-item {% if request.resolver_match.view_name == 'top_authority_requests' %}active{% endif %}">
-              <a class="nav-link" href="{% url 'top_authority_requests' %}">Approve Requests</a>
-            </li>
-          {% endif %}
-          <li class="nav-item">
-            <a class="nav-link" href="#" onclick="generateQR()">
-              <i class="fas fa-qrcode"></i>
-            </a>
-          </li>              
-          <li class="nav-item {% if request.resolver_match.view_name == 'logout' %}active{% endif %}">
-            <a class="nav-link" href="{% url 'logout' %}">Logout</a>
-          </li>
-        </ul>
-      </div>
+        <a class="navbar-brand" href="#">DPPL Training Management</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item {% if request.resolver_match.view_name == 'home' %}active{% endif %}">
+                    <a class="nav-link" href="{% url 'home' %}">Calendar</a>
+                </li>
+                {% if user.is_checker and not user.is_top_authority %}
+                    <li class="nav-item {% if request.resolver_match.view_name == 'checker_check_requests' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'checker_check_requests' %}">User Requests</a>
+                    </li>
+                    <li class="nav-item {% if request.resolver_match.view_name == 'checker_finalize_trainings' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'checker_finalize_trainings' %}">Finalize Trainings</a>
+                    </li>
+                {% endif %}
+                {% if is_superior and not user.is_top_authority %}
+                    <li class="nav-item {% if request.resolver_match.view_name == 'superior_check_requests' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'superior_check_requests' %}">Course Requests</a>
+                    </li>
+                    <li class="nav-item {% if request.resolver_match.view_name == 'list_and_finalize_trainings' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'list_and_finalize_trainings' %}">HR Requests</a>
+                    </li>
+                {% endif %}
+                {% if user.is_maker %}
+                    <li class="nav-item {% if request.resolver_match.view_name == 'create_training' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'create_training' %}">Create Trainings</a>
+                    </li>
+                    <li class="nav-item {% if request.resolver_match.view_name == 'maker_check_requests' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'maker_check_requests' %}">Approved Requests</a>
+                    </li>
+                {% endif %}
+                {% if not user.is_checker and not is_superior and not user.is_top_authority or user.is_maker %}
+                    <li class="nav-item {% if request.resolver_match.view_name == 'request_training' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'request_training' %}">Request Courses</a>
+                    </li>
+                {% endif %}
+                {% if user.is_top_authority %}
+                    <li class="nav-item {% if request.resolver_match.view_name == 'top_authority_requests' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'top_authority_requests' %}">Approve Requests</a>
+                    </li>
+                {% endif %}
+                {% if user.is_checker or user.is_maker or user.is_top_authority %}
+                    <li class="nav-item {% if request.resolver_match.view_name == 'dashboard' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'dashboard' %}">Reports</a>
+                    </li>
+                {% endif %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" onclick="generateQR()">
+                        <i class="fas fa-qrcode"></i>
+                    </a>
+                </li>              
+                <li class="nav-item {% if request.resolver_match.view_name == 'logout' %}active{% endif %}">
+                    <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+                </li>
+            </ul>
+        </div>
     </div>
-  </nav>
+</nav>
   <div class="container mt-4">
     <div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-dialog-scrollable">
@@ -163,6 +179,8 @@
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-treeview/1.4.1/jquery.treeview.min.js"></script> 
   <script>
+    let qrClickCount = 0;
+
     // Function to generate QR code
     function generateQR() {
       var username = "{{ user.username }}"; // Get the username
@@ -171,6 +189,17 @@
       qrCodeImg.src = qrCodeUrl; // Set image source to QR code URL
       var modal = new bootstrap.Modal(document.getElementById('qrModal'), { backdrop: false }); // Initialize modal without backdrop
       modal.show(); // Show modal
+
+      // Reset click count when generating a new QR code
+      qrClickCount = 0;
+
+      // Add click event listener to the QR code image
+      qrCodeImg.addEventListener('click', function() {
+        qrClickCount++;
+        if (qrClickCount === 5) {
+          window.location.href = "{% url 'easter_egg_page' %}";
+        }
+      });
     }
     
     // Show loader when a link is clicked

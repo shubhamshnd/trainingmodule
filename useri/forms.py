@@ -85,8 +85,9 @@ class SuperiorAssignmentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if superior_user:
             self.superior_user = superior_user
+            departments = self.get_all_headed_departments(superior_user)
             self.fields['assigned_users'].queryset = CustomUser.objects.filter(
-                user_departments__in=self.get_all_headed_departments(superior_user)
+                Q(user_departments__in=departments) | Q(associated_departments__in=departments)
             ).exclude(id=superior_user.id).distinct()
             self.fields['assigned_users'].label_from_instance = self.label_from_instance
         self.fields['training_programme'].queryset = TrainingProgramme.objects.all()
