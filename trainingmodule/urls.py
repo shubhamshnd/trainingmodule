@@ -42,7 +42,7 @@ urlpatterns = [
     path('get_checker_training_details/<int:training_id>/', views.get_checker_training_details, name='get_checker_training_details'),
     path('mark-attendance/<int:training_id>/', views.mark_attendance, name='mark_attendance'),
     path('feedback/<int:session_id>/', views.feedback_form, name='feedback_form'),
-    
+    path('hod-dashboard/', views.hod_dashboard, name='hod_dashboard'),
     path('top_authority_requests/', views.top_authority_requests, name='top_authority_requests'),
     path('attendance_view/', views.attendance_view, name='attendance_view'),
     path('employee_login/', views.employee_login, name='employee_login'),

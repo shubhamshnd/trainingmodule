@@ -13,7 +13,7 @@ from itertools import chain
 from collections import defaultdict
 from django.db.models import Count
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
-from django.db.models import Q , F , Max ,Avg ,  Case, When, FloatField , Prefetch
+from django.db.models import Q , F , Max ,Avg ,  Case, When, FloatField , Prefetch ,  IntegerField , Subquery ,  OuterRef
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.http import JsonResponse
@@ -27,7 +27,7 @@ from django.db.models.functions import TruncMonth
 import csv
 from django.shortcuts import render
 from django.db.models import Count, Avg, F, Sum
-
+from django.db.models.functions import Coalesce
 from django.core.serializers.json import DjangoJSONEncoder
 from .models import TrainingSession, RequestTraining, SuperiorAssignedTraining, CustomUser, Department, Feedback, AttendanceMaster
 from datetime import datetime, timedelta ,date
@@ -36,6 +36,81 @@ from dateutil.relativedelta import relativedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
+from django.db import connection
+
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, F, Q, Sum, Case, When, IntegerField, Value
+from django.db.models.functions import Coalesce
+from django.db import connection
+from .models import CustomUser, Department, TrainingProgramme, RequestTraining, AttendanceMaster, TrainingSession
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q, Avg
+from .models import CustomUser, Department, TrainingProgramme, AttendanceMaster, TrainingSession
+
+@login_required
+def hod_dashboard(request):
+    user = request.user
+    departments = Department.objects.filter(head=user)
+    
+    mandatory_trainings = TrainingProgramme.objects.filter(is_mandatory=True)
+    
+    department_data = []
+    total_members = 0
+    total_associates = 0
+
+    for department in departments:
+        members = department.members.all()
+        associates = department.associates.all()
+        
+        total_members += members.count()
+        total_associates += associates.count()
+        
+        member_data = []
+        associate_data = []
+        
+        for employee_list, data_list in [(members, member_data), (associates, associate_data)]:
+            for employee in employee_list:
+                completed_trainings = AttendanceMaster.objects.filter(
+                    custom_user=employee,
+                    training_session__training_programme__in=mandatory_trainings
+                ).select_related('training_session__training_programme').distinct()
+                
+                completed_training_ids = completed_trainings.values_list('training_session__training_programme', flat=True)
+                remaining_trainings = mandatory_trainings.exclude(id__in=completed_training_ids)
+                
+                completion_percentage = (completed_trainings.count() / mandatory_trainings.count()) * 100 if mandatory_trainings.count() > 0 else 0
+                
+                employee_data = {
+                    'user': employee,
+                    'completed': completed_trainings.count(),
+                    'total': mandatory_trainings.count(),
+                    'percentage': round(completion_percentage, 2),
+                    'completed_trainings': [t.training_session.training_programme.title for t in completed_trainings if t.training_session and t.training_session.training_programme],
+                    'remaining_trainings': [t.title for t in remaining_trainings]
+                }
+                
+                data_list.append(employee_data)
+        
+        department_data.append({
+            'department': department,
+            'members': member_data,
+            'associates': associate_data
+        })
+
+    context = {
+        'department_data': department_data,
+        'mandatory_trainings_count': mandatory_trainings.count(),
+        'total_members': total_members,
+        'total_associates': total_associates
+    }
+    
+    return render(request, 'hod_dashboard.html', context)
+
+
 class CustomJSONEncoder(DjangoJSONEncoder):
     def default(self, obj):
         if isinstance(obj, timezone.datetime):

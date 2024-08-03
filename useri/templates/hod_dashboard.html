@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+
+{% block title %}HOD Dashboard{% endblock %}
+
+{% block extrastyles %}
+<style>
+    .dashboard-container {
+        height: 90vh;
+        overflow-y: auto;
+        padding: 20px;
+    }
+    .stat-tile {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+        height: 100%;
+    }
+    .stat-tile:hover {
+        transform: translateY(-5px);
+    }
+    .progress {
+        height: 20px;
+    }
+    .employee-info:hover .training-details {
+        display: block !important;
+    }
+    .training-details {
+        position: absolute;
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+        z-index: 1000;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .department-card {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h2 class="mb-4">HOD Dashboard</h2>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="stat-tile">
+                <h4>Total Members</h4>
+                <h2>{{ total_members }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-tile">
+                <h4>Total Associates</h4>
+                <h2>{{ total_associates }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-tile">
+                <h4>Mandatory Trainings</h4>
+                <h2>{{ mandatory_trainings_count }}</h2>
+            </div>
+        </div>
+    </div>
+
+    {% for dept_data in department_data %}
+    <div class="card department-card">
+        <div class="card-header">
+            <h3>{{ dept_data.department.name }}</h3>
+        </div>
+        <div class="card-body">
+            <h4 class="mb-3">Department Members ({{ dept_data.members|length }})</h4>
+            {% for member in dept_data.members %}
+                <div class="mb-3 employee-info position-relative">
+                    <p class="mb-1">{{ member.user.employee_name }} ({{ member.user.employee_id }})</p>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: {{ member.percentage }}%;" aria-valuenow="{{ member.percentage }}" aria-valuemin="0" aria-valuemax="100">
+                            {{ member.percentage }}%
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ member.completed }} / {{ member.total }} mandatory trainings completed</small>
+                    <div class="training-details d-none">
+                        <h5>Completed Trainings:</h5>
+                        <ul>
+                            {% for training in member.completed_trainings %}
+                                <li>{{ training }}</li>
+                            {% empty %}
+                                <li>No completed trainings</li>
+                            {% endfor %}
+                        </ul>
+                        <h5>Remaining Trainings:</h5>
+                        <ul>
+                            {% for training in member.remaining_trainings %}
+                                <li>{{ training }}</li>
+                            {% empty %}
+                                <li>All trainings completed</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% empty %}
+                <p>No department members found.</p>
+            {% endfor %}
+
+            <h4 class="mt-4 mb-3">Associates ({{ dept_data.associates|length }})</h4>
+            {% for associate in dept_data.associates %}
+                <div class="mb-3 employee-info position-relative">
+                    <p class="mb-1">{{ associate.user.employee_name }} ({{ associate.user.employee_id }})</p>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: {{ associate.percentage }}%;" aria-valuenow="{{ associate.percentage }}" aria-valuemin="0" aria-valuemax="100">
+                            {{ associate.percentage }}%
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ associate.completed }} / {{ associate.total }} mandatory trainings completed</small>
+                    <div class="training-details d-none">
+                        <h5>Completed Trainings:</h5>
+                        <ul>
+                            {% for training in associate.completed_trainings %}
+                                <li>{{ training }}</li>
+                            {% empty %}
+                                <li>No completed trainings</li>
+                            {% endfor %}
+                        </ul>
+                        <h5>Remaining Trainings:</h5>
+                        <ul>
+                            {% for training in associate.remaining_trainings %}
+                                <li>{{ training }}</li>
+                            {% empty %}
+                                <li>All trainings completed</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% empty %}
+                <p>No associates found.</p>
+            {% endfor %}
+        </div>
+    </div>
+    {% empty %}
+        <div class="alert alert-info">You are not assigned as the head of any department.</div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+
+{% block extrascripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Training Completion Chart
+        var trainingCtx = document.getElementById('trainingCompletionChart').getContext('2d');
+        var trainingData = {{ training_completion_percentages|safe }};
+        var trainingLabels = trainingData.map(item => item.name);
+        var trainingPercentages = trainingData.map(item => item.percentage);
+
+        new Chart(trainingCtx, {
+            type: 'bar',
+            data: {
+                labels: trainingLabels,
+                datasets: [{
+                    label: 'Completion Rate',
+                    data: trainingPercentages,
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // Department Completion Chart
+        var departmentCtx = document.getElementById('departmentCompletionChart').getContext('2d');
+        var departmentData = {{ department_data|safe }};
+        var departmentLabels = departmentData.map(item => item.department.name);
+        var departmentPercentages = departmentData.map(item => {
+            var totalEmployees = item.members.length + item.associates.length;
+            var totalCompletion = item.members.reduce((sum, member) => sum + member.percentage, 0) +
+                                  item.associates.reduce((sum, associate) => sum + associate.percentage, 0);
+            return totalCompletion / totalEmployees;
+        });
+
+        new Chart(departmentCtx, {
+            type: 'pie',
+            data: {
+                labels: departmentLabels,
+                datasets: [{
+                    data: departmentPercentages,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.6)',
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(255, 206, 86, 0.6)',
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(153, 102, 255, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Department Completion Rates'
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

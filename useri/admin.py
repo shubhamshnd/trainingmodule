@@ -39,12 +39,11 @@ class CustomUserAdmin(UserAdmin):
 
 
 class TrainingProgrammeAdmin(admin.ModelAdmin):
-    list_display = ['title', 'validity']
+    list_display = ['title', 'validity', 'is_mandatory']  # Added 'is_mandatory'
     search_fields = ['title']
     ordering = ['title']
-    fields = ['title', 'validity']
-    list_filter = ['validity']
-
+    fields = ['title', 'validity', 'is_mandatory']  # Added 'is_mandatory'
+    list_filter = ['validity', 'is_mandatory']  # Added 'is_mandatory'
 
 class RequestTrainingAdmin(admin.ModelAdmin):
     list_display = ['custom_user', 'training_programme', 'other_training', 'status', 'request_date', 'last_updated']

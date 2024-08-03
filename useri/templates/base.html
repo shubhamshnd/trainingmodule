@@ -118,6 +118,9 @@
                     <li class="nav-item {% if request.resolver_match.view_name == 'list_and_finalize_trainings' %}active{% endif %}">
                         <a class="nav-link" href="{% url 'list_and_finalize_trainings' %}">HR Requests</a>
                     </li>
+                    <li class="nav-item {% if request.resolver_match.view_name == 'hod_dashboard' %}active{% endif %}">
+                        <a class="nav-link" href="{% url 'hod_dashboard' %}">Reports</a>
+                    </li>
                 {% endif %}
                 {% if user.is_maker %}
                     <li class="nav-item {% if request.resolver_match.view_name == 'create_training' %}active{% endif %}">

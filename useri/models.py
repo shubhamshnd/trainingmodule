@@ -145,7 +145,8 @@ class Department(models.Model):
 
 class TrainingProgramme(models.Model):
     title = models.CharField(max_length=255)
-    validity = models.IntegerField(default=2)  # Validity in years
+    validity = models.IntegerField(default=2)
+    is_mandatory = models.BooleanField(default=False)# Validity in years
 
     def __str__(self):
         return self.title
