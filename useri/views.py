@@ -69,36 +69,34 @@ def hod_dashboard(request):
         total_members += members.count()
         total_associates += associates.count()
         
-        member_data = []
-        associate_data = []
+        training_data = []
         
-        for employee_list, data_list in [(members, member_data), (associates, associate_data)]:
-            for employee in employee_list:
-                completed_trainings = AttendanceMaster.objects.filter(
-                    custom_user=employee,
-                    training_session__training_programme__in=mandatory_trainings
-                ).select_related('training_session__training_programme').distinct()
-                
-                completed_training_ids = completed_trainings.values_list('training_session__training_programme', flat=True)
-                remaining_trainings = mandatory_trainings.exclude(id__in=completed_training_ids)
-                
-                completion_percentage = (completed_trainings.count() / mandatory_trainings.count()) * 100 if mandatory_trainings.count() > 0 else 0
-                
-                employee_data = {
-                    'user': employee,
-                    'completed': completed_trainings.count(),
-                    'total': mandatory_trainings.count(),
-                    'percentage': round(completion_percentage, 2),
-                    'completed_trainings': [t.training_session.training_programme.title for t in completed_trainings if t.training_session and t.training_session.training_programme],
-                    'remaining_trainings': [t.title for t in remaining_trainings]
-                }
-                
-                data_list.append(employee_data)
+        for training in mandatory_trainings:
+            members_completed = AttendanceMaster.objects.filter(
+                custom_user__in=members,
+                training_session__training_programme=training
+            ).values('custom_user').distinct().count()
+            
+            associates_completed = AttendanceMaster.objects.filter(
+                custom_user__in=associates,
+                training_session__training_programme=training
+            ).values('custom_user').distinct().count()
+            
+            training_data.append({
+                'training': training,
+                'members_completed': members_completed,
+                'members_total': members.count(),
+                'associates_completed': associates_completed,
+                'associates_total': associates.count(),
+                'members_not_completed': [member.employee_name for member in members if not AttendanceMaster.objects.filter(custom_user=member, training_session__training_programme=training).exists()],
+                'members_completed_list': [member.employee_name for member in members if AttendanceMaster.objects.filter(custom_user=member, training_session__training_programme=training).exists()],
+                'associates_not_completed': [associate.employee_name for associate in associates if not AttendanceMaster.objects.filter(custom_user=associate, training_session__training_programme=training).exists()],
+                'associates_completed_list': [associate.employee_name for associate in associates if AttendanceMaster.objects.filter(custom_user=associate, training_session__training_programme=training).exists()],
+            })
         
         department_data.append({
             'department': department,
-            'members': member_data,
-            'associates': associate_data
+            'training_data': training_data
         })
 
     context = {

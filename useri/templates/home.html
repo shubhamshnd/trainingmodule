@@ -98,16 +98,27 @@
     }
     .event-details {
         display: none;
-        position: absolute;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
         background-color: #fff;
         border: 1px solid #ddd;
-        padding: 10px;
+        padding: 20px;
         z-index: 1000;
-        width: 200px;
+        width: 300px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         color: #333;
-        left: 100%;
+    }
+    .modal-backdrop {
+        display: none;
+        position: fixed;
         top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
     }
     .event:hover .event-details {
         display: block;
@@ -183,130 +194,167 @@
         </div>
     </div>
 </div>
+<div id="eventDetailsModal" class="event-details"></div>
+<div class="modal-backdrop"></div>
 {% endblock %}
 
 {% block extrascripts %}
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    const calendarContainer = document.getElementById("calendar");
-    const prevMonthButton = document.getElementById("prevMonth");
-    const nextMonthButton = document.getElementById("nextMonth");
-    const currentMonthDisplay = document.getElementById("currentMonth");
-
-    let currentDate = new Date(2024, 6, 1); // July 2024
-    let currentMonth = currentDate.getMonth();
-    let currentYear = currentDate.getFullYear();
-
-    let events = [];
-
-    function loadEvents() {
-        fetch("/api/user_trainings/")
-            .then(response => response.json())
-            .then(data => {
-                console.log("Events fetched from API:", data);
-                events = data;
-                generateCalendar(currentMonth, currentYear);
-            })
-            .catch(error => {
-                console.error("Error fetching training sessions:", error);
-            });
-    }
-
-    function generateCalendar(month, year) {
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const daysInMonth = lastDay.getDate();
-        const startingDay = firstDay.getDay();
-
-        const monthNames = ["January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"];
-
-        currentMonthDisplay.textContent = `${monthNames[month]} ${year}`;
-
-        calendarContainer.innerHTML = `
-            <div class="calendar-header">Sun</div>
-            <div class="calendar-header">Mon</div>
-            <div class="calendar-header">Tue</div>
-            <div class="calendar-header">Wed</div>
-            <div class="calendar-header">Thu</div>
-            <div class="calendar-header">Fri</div>
-            <div class="calendar-header">Sat</div>
-        `;
-
-        let date = 1;
-        for (let i = 0; i < 42; i++) {
-            const dayElement = document.createElement("div");
-            dayElement.classList.add("calendar-day");
+    document.addEventListener("DOMContentLoaded", function() {
+        const calendarContainer = document.getElementById("calendar");
+        const prevMonthButton = document.getElementById("prevMonth");
+        const nextMonthButton = document.getElementById("nextMonth");
+        const currentMonthDisplay = document.getElementById("currentMonth");
+        const eventDetailsModal = document.getElementById("eventDetailsModal");
+        const modalBackdrop = document.querySelector(".modal-backdrop");
     
-            if (i >= startingDay && date <= daysInMonth) {
-                const dayNumber = document.createElement("div");
-                dayNumber.classList.add("day-number");
-                dayNumber.textContent = date;
-                dayElement.appendChild(dayNumber);
+        let currentDate = new Date(2024, 6, 1); // July 2024
+        let currentMonth = currentDate.getMonth();
+        let currentYear = currentDate.getFullYear();
     
-                const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
-                const dayEvents = events.filter(event => event.date === formattedDate);
+        let events = [];
     
-                const eventsContainer = document.createElement("div");
-                eventsContainer.classList.add("events-container");
-    
-                const maxVisibleEvents = 3;
-                dayEvents.slice(0, maxVisibleEvents).forEach(event => {
-                    const eventElement = document.createElement("div");
-                    eventElement.classList.add("event");
-                    eventElement.textContent = event.title;
-                    
-                    const detailsElement = document.createElement("div");
-                    detailsElement.classList.add("event-details");
-                    detailsElement.innerHTML = `
-                        <strong>${event.title}</strong><br>
-                        Time: ${event.startTime} - ${event.endTime}<br>
-                        Venue: ${event.venue}<br>
-                        Trainer: ${event.trainer}
-                    `;
-                    eventElement.appendChild(detailsElement);
-                    
-                    eventsContainer.appendChild(eventElement);
+        function loadEvents() {
+            fetch("/api/user_trainings/")
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Events fetched from API:", data);
+                    events = data;
+                    generateCalendar(currentMonth, currentYear);
+                })
+                .catch(error => {
+                    console.error("Error fetching training sessions:", error);
                 });
+        }
     
-                if (dayEvents.length > maxVisibleEvents) {
-                    const moreIndicator = document.createElement("div");
-                    moreIndicator.classList.add("more-events");
-                    moreIndicator.textContent = `+${dayEvents.length - maxVisibleEvents} more`;
-                    eventsContainer.appendChild(moreIndicator);
+        function generateCalendar(month, year) {
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDay = firstDay.getDay();
+    
+            const monthNames = ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"];
+    
+            currentMonthDisplay.textContent = `${monthNames[month]} ${year}`;
+    
+            calendarContainer.innerHTML = `
+                <div class="calendar-header">Sun</div>
+                <div class="calendar-header">Mon</div>
+                <div class="calendar-header">Tue</div>
+                <div class="calendar-header">Wed</div>
+                <div class="calendar-header">Thu</div>
+                <div class="calendar-header">Fri</div>
+                <div class="calendar-header">Sat</div>
+            `;
+    
+            let date = 1;
+            for (let i = 0; i < 42; i++) {
+                const dayElement = document.createElement("div");
+                dayElement.classList.add("calendar-day");
+        
+                if (i >= startingDay && date <= daysInMonth) {
+                    const dayNumber = document.createElement("div");
+                    dayNumber.classList.add("day-number");
+                    dayNumber.textContent = date;
+                    dayElement.appendChild(dayNumber);
+        
+                    const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+                    const dayEvents = events.filter(event => event.date === formattedDate);
+        
+                    const eventsContainer = document.createElement("div");
+                    eventsContainer.classList.add("events-container");
+        
+                    const maxVisibleEvents = 3;
+                    dayEvents.forEach((event, index) => {
+                        const eventElement = document.createElement("div");
+                        eventElement.classList.add("event");
+                        eventElement.textContent = event.title;
+                        eventElement.addEventListener("click", function(e) {
+                            e.stopPropagation();
+                            showEventDetails(event);
+                        });
+                        
+                        if (index < maxVisibleEvents) {
+                            eventsContainer.appendChild(eventElement);
+                        }
+                    });
+        
+                    if (dayEvents.length > maxVisibleEvents) {
+                        const moreIndicator = document.createElement("div");
+                        moreIndicator.classList.add("more-events");
+                        moreIndicator.textContent = `+${dayEvents.length - maxVisibleEvents} more`;
+                        moreIndicator.addEventListener("click", function(e) {
+                            e.stopPropagation();
+                            showAllEvents(dayEvents);
+                        });
+                        eventsContainer.appendChild(moreIndicator);
+                    }
+        
+                    dayElement.appendChild(eventsContainer);
+        
+                    date++;
                 }
-    
-                dayElement.appendChild(eventsContainer);
-    
-                date++;
+        
+                calendarContainer.appendChild(dayElement);
             }
+        }
     
-            calendarContainer.appendChild(dayElement);
+        function showEventDetails(event) {
+            eventDetailsModal.innerHTML = `
+                <h3>${event.title}</h3>
+                <p><strong>Date:</strong> ${event.date}</p>
+                <p><strong>Time:</strong> ${event.startTime} - ${event.endTime}</p>
+                <p><strong>Venue:</strong> ${event.venue}</p>
+                <p><strong>Trainer:</strong> ${event.trainer}</p>
+            `;
+            eventDetailsModal.style.display = "block";
+            modalBackdrop.style.display = "block";
         }
-    }
-
-    generateCalendar(currentMonth, currentYear);
-    loadEvents();
-
-    prevMonthButton.addEventListener("click", function() {
-        currentMonth--;
-        if (currentMonth < 0) {
-            currentMonth = 11;
-            currentYear--;
+    
+        function showAllEvents(events) {
+            let eventsHtml = events.map(event => `
+                <div class="event" onclick="showEventDetails(${JSON.stringify(event)})">
+                    <strong>${event.title}</strong><br>
+                    Time: ${event.startTime} - ${event.endTime}
+                </div>
+            `).join('');
+    
+            eventDetailsModal.innerHTML = `
+                <h3>All Events</h3>
+                ${eventsHtml}
+            `;
+            eventDetailsModal.style.display = "block";
+            modalBackdrop.style.display = "block";
         }
+    
+        modalBackdrop.addEventListener("click", function() {
+            eventDetailsModal.style.display = "none";
+            modalBackdrop.style.display = "none";
+        });
+    
         generateCalendar(currentMonth, currentYear);
         loadEvents();
+    
+        prevMonthButton.addEventListener("click", function() {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            generateCalendar(currentMonth, currentYear);
+            loadEvents();
+        });
+    
+        nextMonthButton.addEventListener("click", function() {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            generateCalendar(currentMonth, currentYear);
+            loadEvents();
+        });
     });
-
-    nextMonthButton.addEventListener("click", function() {
-        currentMonth++;
-        if (currentMonth > 11) {
-            currentMonth = 0;
-            currentYear++;
-        }
-        generateCalendar(currentMonth, currentYear);
-        loadEvents();
-    });
-});
 </script>
 {% endblock %}

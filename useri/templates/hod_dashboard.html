@@ -22,28 +22,52 @@
     }
     .progress {
         height: 20px;
+        margin-bottom: 5px;
     }
-    .employee-info:hover .training-details {
-        display: block !important;
+    .progress-members {
+        background-color: #e9ecef;
+    }
+    .progress-associates {
+        background-color: #dee2e6;
+    }
+    .training-info {
+        cursor: pointer;
     }
     .training-details {
-        position: absolute;
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
         background-color: white;
         border: 1px solid #ddd;
         border-radius: 5px;
-        padding: 10px;
+        padding: 20px;
         z-index: 1000;
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        max-width: 80%;
+        max-height: 80%;
+        overflow-y: auto;
     }
     .department-card {
         margin-bottom: 20px;
+    }
+    .modal-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-container">
-    <h2 class="mb-4">HOD Dashboard</h2>
+    
 
     <div class="row mb-4">
         <div class="col-md-4">
@@ -72,70 +96,58 @@
             <h3>{{ dept_data.department.name }}</h3>
         </div>
         <div class="card-body">
-            <h4 class="mb-3">Department Members ({{ dept_data.members|length }})</h4>
-            {% for member in dept_data.members %}
-                <div class="mb-3 employee-info position-relative">
-                    <p class="mb-1">{{ member.user.employee_name }} ({{ member.user.employee_id }})</p>
-                    <div class="progress">
-                        <div class="progress-bar" role="progressbar" style="width: {{ member.percentage }}%;" aria-valuenow="{{ member.percentage }}" aria-valuemin="0" aria-valuemax="100">
-                            {{ member.percentage }}%
+            {% for training in dept_data.training_data %}
+                <div class="mb-4 training-info" data-training-id="{{ forloop.counter }}">
+                    <h5>{{ training.training.title }}</h5>
+                    <p class="mb-1">Members Progress</p>
+                    <div class="progress progress-members">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {% widthratio training.members_completed training.members_total 100 %}%;" aria-valuenow="{% widthratio training.members_completed training.members_total 100 %}" aria-valuemin="0" aria-valuemax="100">
+                            {% widthratio training.members_completed training.members_total 100 %}%
                         </div>
                     </div>
-                    <small class="text-muted">{{ member.completed }} / {{ member.total }} mandatory trainings completed</small>
-                    <div class="training-details d-none">
-                        <h5>Completed Trainings:</h5>
-                        <ul>
-                            {% for training in member.completed_trainings %}
-                                <li>{{ training }}</li>
-                            {% empty %}
-                                <li>No completed trainings</li>
-                            {% endfor %}
-                        </ul>
-                        <h5>Remaining Trainings:</h5>
-                        <ul>
-                            {% for training in member.remaining_trainings %}
-                                <li>{{ training }}</li>
-                            {% empty %}
-                                <li>All trainings completed</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            {% empty %}
-                <p>No department members found.</p>
-            {% endfor %}
-
-            <h4 class="mt-4 mb-3">Associates ({{ dept_data.associates|length }})</h4>
-            {% for associate in dept_data.associates %}
-                <div class="mb-3 employee-info position-relative">
-                    <p class="mb-1">{{ associate.user.employee_name }} ({{ associate.user.employee_id }})</p>
-                    <div class="progress">
-                        <div class="progress-bar" role="progressbar" style="width: {{ associate.percentage }}%;" aria-valuenow="{{ associate.percentage }}" aria-valuemin="0" aria-valuemax="100">
-                            {{ associate.percentage }}%
+                    <p class="mb-1">Associates Progress</p>
+                    <div class="progress progress-associates">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {% widthratio training.associates_completed training.associates_total 100 %}%;" aria-valuenow="{% widthratio training.associates_completed training.associates_total 100 %}" aria-valuemin="0" aria-valuemax="100">
+                            {% widthratio training.associates_completed training.associates_total 100 %}%
                         </div>
                     </div>
-                    <small class="text-muted">{{ associate.completed }} / {{ associate.total }} mandatory trainings completed</small>
-                    <div class="training-details d-none">
-                        <h5>Completed Trainings:</h5>
-                        <ul>
-                            {% for training in associate.completed_trainings %}
-                                <li>{{ training }}</li>
-                            {% empty %}
-                                <li>No completed trainings</li>
-                            {% endfor %}
-                        </ul>
-                        <h5>Remaining Trainings:</h5>
-                        <ul>
-                            {% for training in associate.remaining_trainings %}
-                                <li>{{ training }}</li>
-                            {% empty %}
-                                <li>All trainings completed</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
+                    <small class="text-muted">Members: {{ training.members_completed }} / {{ training.members_total }} | Associates: {{ training.associates_completed }} / {{ training.associates_total }}</small>
                 </div>
-            {% empty %}
-                <p>No associates found.</p>
+                <div class="training-details" id="training-details-{{ forloop.counter }}">
+                    <h4>{{ training.training.title }} - Details</h4>
+                    <h6>Members Not Completed:</h6>
+                    <ul>
+                        {% for member in training.members_not_completed %}
+                            <li>{{ member }}</li>
+                        {% empty %}
+                            <li>All members completed</li>
+                        {% endfor %}
+                    </ul>
+                    <h6>Members Completed:</h6>
+                    <ul>
+                        {% for member in training.members_completed_list %}
+                            <li>{{ member }}</li>
+                        {% empty %}
+                            <li>No members completed</li>
+                        {% endfor %}
+                    </ul>
+                    <h6>Associates Not Completed:</h6>
+                    <ul>
+                        {% for associate in training.associates_not_completed %}
+                            <li>{{ associate }}</li>
+                        {% empty %}
+                            <li>All associates completed</li>
+                        {% endfor %}
+                    </ul>
+                    <h6>Associates Completed:</h6>
+                    <ul>
+                        {% for associate in training.associates_completed_list %}
+                            <li>{{ associate }}</li>
+                        {% empty %}
+                            <li>No associates completed</li>
+                        {% endfor %}
+                    </ul>
+                </div>
             {% endfor %}
         </div>
     </div>
@@ -143,89 +155,31 @@
         <div class="alert alert-info">You are not assigned as the head of any department.</div>
     {% endfor %}
 </div>
+<div class="modal-backdrop"></div>
 {% endblock %}
 
-
 {% block extrascripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Training Completion Chart
-        var trainingCtx = document.getElementById('trainingCompletionChart').getContext('2d');
-        var trainingData = {{ training_completion_percentages|safe }};
-        var trainingLabels = trainingData.map(item => item.name);
-        var trainingPercentages = trainingData.map(item => item.percentage);
+document.addEventListener('DOMContentLoaded', function() {
+    const trainingInfos = document.querySelectorAll('.training-info');
+    const trainingDetails = document.querySelectorAll('.training-details');
+    const modalBackdrop = document.querySelector('.modal-backdrop');
 
-        new Chart(trainingCtx, {
-            type: 'bar',
-            data: {
-                labels: trainingLabels,
-                datasets: [{
-                    label: 'Completion Rate',
-                    data: trainingPercentages,
-                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100
-                    }
-                }
-            }
-        });
-
-        // Department Completion Chart
-        var departmentCtx = document.getElementById('departmentCompletionChart').getContext('2d');
-        var departmentData = {{ department_data|safe }};
-        var departmentLabels = departmentData.map(item => item.department.name);
-        var departmentPercentages = departmentData.map(item => {
-            var totalEmployees = item.members.length + item.associates.length;
-            var totalCompletion = item.members.reduce((sum, member) => sum + member.percentage, 0) +
-                                  item.associates.reduce((sum, associate) => sum + associate.percentage, 0);
-            return totalCompletion / totalEmployees;
-        });
-
-        new Chart(departmentCtx, {
-            type: 'pie',
-            data: {
-                labels: departmentLabels,
-                datasets: [{
-                    data: departmentPercentages,
-                    backgroundColor: [
-                        'rgba(255, 99, 132, 0.6)',
-                        'rgba(54, 162, 235, 0.6)',
-                        'rgba(255, 206, 86, 0.6)',
-                        'rgba(75, 192, 192, 0.6)',
-                        'rgba(153, 102, 255, 0.6)'
-                    ],
-                    borderColor: [
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(153, 102, 255, 1)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                    },
-                    title: {
-                        display: true,
-                        text: 'Department Completion Rates'
-                    }
-                }
-            }
+    trainingInfos.forEach(info => {
+        info.addEventListener('click', function() {
+            const trainingId = this.getAttribute('data-training-id');
+            const details = document.getElementById(`training-details-${trainingId}`);
+            details.style.display = 'block';
+            modalBackdrop.style.display = 'block';
         });
     });
+
+    modalBackdrop.addEventListener('click', function() {
+        trainingDetails.forEach(detail => {
+            detail.style.display = 'none';
+        });
+        modalBackdrop.style.display = 'none';
+    });
+});
 </script>
 {% endblock %}
